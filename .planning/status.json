@@ -3,21 +3,28 @@
   "created": "2026-04-04",
   "updated": "2026-04-04",
   "status": "in-progress",
-  "current_phase": "01-structured-results",
+  "current_phase": "02-executable-smoke-tests",
   "checkpoint_frequency": 2,
-  "phases_since_checkpoint": 0,
+  "phases_since_checkpoint": 1,
   "target_worker": "hetzner",
   "phases": {
     "01-structured-results": {
-      "status": "pending",
+      "status": "complete",
       "complexity": "standard",
       "depends_on": [],
-      "revisions": 0
+      "queued_at": "2026-04-04T17:15:00Z",
+      "completed_at": "2026-04-04T17:22:00Z",
+      "task_id": "1775314524375",
+      "commit": "202726a",
+      "revisions": 0,
+      "smoke_tests_passed": 6,
+      "smoke_tests_total": 6
     },
     "02-executable-smoke-tests": {
-      "status": "pending",
+      "status": "queued",
       "complexity": "standard",
       "depends_on": ["01-structured-results"],
+      "queued_at": "2026-04-04T17:25:00Z",
       "revisions": 0
     },
     "03-cancellation": {
@@ -42,10 +49,10 @@
   "blocked": false,
   "blocked_reason": null,
   "metrics": {
-    "phases_complete": 0,
+    "phases_complete": 1,
     "phases_total": 4,
     "total_revisions": 0,
-    "total_smoke_tests": 0,
+    "total_smoke_tests": 6,
     "started_at": "2026-04-04T17:15:00Z"
   }
 }
