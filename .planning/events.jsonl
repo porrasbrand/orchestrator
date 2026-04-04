@@ -69,3 +69,9 @@
 {"ts":"2026-04-04T15:42:59Z","event":"phase_response","data":{"phase":"01-parallel-dispatch","task_id":"1775317232080"}}
 {"ts":"2026-04-04T15:42:59Z","event":"smoke_test_pass","data":{"phase":"01-parallel-dispatch","tests_passed":6,"tests_total":6}}
 {"ts":"2026-04-04T15:42:59Z","event":"phase_complete","data":{"phase":"01-parallel-dispatch","commit":"cc38843"}}
+{"ts":"2026-04-04T15:44:05Z","event":"phase_specified","data":{"phase":"02-merge-orchestration"}}
+{"ts":"2026-04-04T15:44:05Z","event":"phase_queued","data":{"phase":"02-merge-orchestration","task_id":"PENDING","worker":"hetzner"}}
+{"ts":"2026-04-04T15:46:04Z","event":"phase_response","data":{"phase":"02-merge-orchestration","task_id":"1775317443535"}}
+{"ts":"2026-04-04T15:46:04Z","event":"smoke_test_pass","data":{"phase":"02-merge-orchestration","tests_passed":5,"tests_total":5}}
+{"ts":"2026-04-04T15:46:04Z","event":"phase_complete","data":{"phase":"02-merge-orchestration","commit":"85a5399"}}
+{"ts":"2026-04-04T15:46:04Z","event":"checkpoint","data":{"phases_complete":2,"phases_total":4}}
