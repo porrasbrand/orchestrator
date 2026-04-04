@@ -34,3 +34,8 @@
 {"ts":"2026-04-04T15:05:41Z","event":"regression_pass","data":{"phase":"02-executable-smoke-tests","previous_phases":["01-structured-results"]}}
 {"ts":"2026-04-04T15:05:41Z","event":"phase_complete","data":{"phase":"02-executable-smoke-tests","commit":"e92d495"}}
 {"ts":"2026-04-04T15:05:41Z","event":"checkpoint","data":{"phases_complete":2,"phases_total":4}}
+{"ts":"2026-04-04T15:07:17Z","event":"phase_specified","data":{"phase":"03-cancellation"}}
+{"ts":"2026-04-04T15:07:17Z","event":"phase_queued","data":{"phase":"03-cancellation","task_id":"1775315229035","worker":"hetzner"}}
+{"ts":"2026-04-04T15:08:55Z","event":"phase_response","data":{"phase":"03-cancellation","task_id":"1775315229035"}}
+{"ts":"2026-04-04T15:08:55Z","event":"smoke_test_pass","data":{"phase":"03-cancellation","tests_passed":6,"tests_total":6}}
+{"ts":"2026-04-04T15:08:55Z","event":"phase_complete","data":{"phase":"03-cancellation","commit":"1d88e7e"}}
