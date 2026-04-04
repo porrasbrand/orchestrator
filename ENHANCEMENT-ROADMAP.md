@@ -43,7 +43,7 @@ Make the orchestrator smarter — catch problems earlier, learn from history.
 | # | Enhancement | What | Why | Effort |
 |---|-------------|------|-----|--------|
 | 2.1 | **Structured learnings (JSONL)** | Replace learnings.md with learnings.jsonl. Schema: `{phase, category, discovery, impact}`. Keep learnings.md as human-readable view generated from JSONL. | Can't query "what failed in auth phases?" Currently just a flat markdown file. | 2 hr |
-| 2.2 | **Context reset / handoff** | Add summary handoff template. Each phase spec includes a "Prior Work Summary" section (max 500 words) instead of assuming DEV has full context. Add `--fresh-context` flag to queue command. | Long projects degrade as Claude context fills. Gemini flagged this as top concern. | 3 hr |
+| 2.2 | **Context reset / handoff** ✅ | Add summary handoff template. Each phase spec includes a "Prior Work Summary" section (max 500 words) instead of assuming DEV has full context. Add `--fresh-context` flag to queue command. | Long projects degrade as Claude context fills. Gemini flagged this as top concern. | 3 hr | **DONE** |
 | 2.3 | **Spec quality pre-check** | Before queuing, orchestrator scores spec on: has smoke tests? has acceptance criteria? has clear scope? Missing elements → warning. | Vague specs cause most revisions. Catch bad specs before they waste a phase cycle. | 2 hr |
 | 2.4 | **Diff-based verification** | Spec includes `expected_files_changed: [list]`. Verification checks git diff and warns if unrelated files were modified. | Prevents DEV scope creep — touching files outside spec. | 2 hr |
 

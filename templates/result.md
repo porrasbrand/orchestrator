@@ -12,6 +12,10 @@
 ## Files Modified
 - `path/to/file.js` — [what changed]
 
+## Files Actually Changed
+Git diff summary — verify against spec's "Expected Files Changed":
+- `path/to/file.js` — [matches expected: yes/no]
+
 ## Acceptance Criteria Status
 - [x] Criterion 1
 - [x] Criterion 2

@@ -4,6 +4,11 @@
 [What exists now. Reference snapshot.md for codebase overview.]
 [What was built in previous phases. Reference learnings.md for discoveries.]
 
+## Prior Work Summary
+[Concise summary of what prior phases built — max 500 words. Include: key files created,
+architecture decisions made, any learnings that affect this phase. This section ensures
+DEV workers have clean context without needing to read all prior specs.]
+
 ## Objective
 [What this phase must accomplish — clear, specific, measurable]
 
@@ -20,6 +25,10 @@
 
 ## Do NOT Touch
 - [Files/systems that must remain unchanged]
+
+## Expected Files Changed
+Files this phase should create or modify. Verification will warn if other files are touched.
+- `path/to/file.js` (create | modify) — [purpose]
 
 ## Acceptance Criteria
 - [ ] Criterion 1 (testable)
