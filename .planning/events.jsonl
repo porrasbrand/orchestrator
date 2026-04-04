@@ -57,3 +57,8 @@
 {"ts":"2026-04-04T15:26:40Z","event":"smoke_test_pass","data":{"phase":"03-branch-per-phase","tests_passed":5,"tests_total":5}}
 {"ts":"2026-04-04T15:26:40Z","event":"phase_complete","data":{"phase":"03-branch-per-phase","commit":"f42e512"}}
 {"ts":"2026-04-04T15:26:40Z","event":"checkpoint","data":{"phases_complete":3,"phases_total":5}}
+{"ts":"2026-04-04T15:28:09Z","event":"phase_specified","data":{"phase":"04-status-web-page"}}
+{"ts":"2026-04-04T15:28:09Z","event":"phase_queued","data":{"phase":"04-status-web-page","task_id":"1775316480652","worker":"hetzner"}}
+{"ts":"2026-04-04T15:30:15Z","event":"phase_response","data":{"phase":"04-status-web-page","task_id":"1775316480652"}}
+{"ts":"2026-04-04T15:30:15Z","event":"smoke_test_pass","data":{"phase":"04-status-web-page","tests_passed":8,"tests_total":8}}
+{"ts":"2026-04-04T15:30:15Z","event":"phase_complete","data":{"phase":"04-status-web-page","commit":"c0c8c94"}}
