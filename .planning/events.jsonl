@@ -75,3 +75,8 @@
 {"ts":"2026-04-04T15:46:04Z","event":"smoke_test_pass","data":{"phase":"02-merge-orchestration","tests_passed":5,"tests_total":5}}
 {"ts":"2026-04-04T15:46:04Z","event":"phase_complete","data":{"phase":"02-merge-orchestration","commit":"85a5399"}}
 {"ts":"2026-04-04T15:46:04Z","event":"checkpoint","data":{"phases_complete":2,"phases_total":4}}
+{"ts":"2026-04-04T15:47:11Z","event":"phase_specified","data":{"phase":"03-worker-load-balancing"}}
+{"ts":"2026-04-04T15:47:11Z","event":"phase_queued","data":{"phase":"03-worker-load-balancing","worker":"hetzner"}}
+{"ts":"2026-04-04T15:52:50Z","event":"phase_response","data":{"phase":"03-worker-load-balancing","task_id":"1775317629250"}}
+{"ts":"2026-04-04T15:52:50Z","event":"smoke_test_pass","data":{"phase":"03-worker-load-balancing","tests_passed":5,"tests_total":5}}
+{"ts":"2026-04-04T15:52:50Z","event":"phase_complete","data":{"phase":"03-worker-load-balancing","commit":"eefe68e"}}
