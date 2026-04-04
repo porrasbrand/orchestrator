@@ -3,9 +3,9 @@
   "created": "2026-04-04",
   "updated": "2026-04-04",
   "status": "in-progress",
-  "current_phase": "02-executable-smoke-tests",
+  "current_phase": "03-cancellation",
   "checkpoint_frequency": 2,
-  "phases_since_checkpoint": 1,
+  "phases_since_checkpoint": 0,
   "target_worker": "hetzner",
   "phases": {
     "01-structured-results": {
@@ -21,11 +21,16 @@
       "smoke_tests_total": 6
     },
     "02-executable-smoke-tests": {
-      "status": "queued",
+      "status": "complete",
       "complexity": "standard",
       "depends_on": ["01-structured-results"],
       "queued_at": "2026-04-04T17:25:00Z",
-      "revisions": 0
+      "completed_at": "2026-04-04T17:30:00Z",
+      "task_id": "1775314919486",
+      "commit": "e92d495",
+      "revisions": 0,
+      "smoke_tests_passed": 6,
+      "smoke_tests_total": 6
     },
     "03-cancellation": {
       "status": "pending",
@@ -49,10 +54,10 @@
   "blocked": false,
   "blocked_reason": null,
   "metrics": {
-    "phases_complete": 1,
+    "phases_complete": 2,
     "phases_total": 4,
     "total_revisions": 0,
-    "total_smoke_tests": 6,
+    "total_smoke_tests": 12,
     "started_at": "2026-04-04T17:15:00Z"
   }
 }

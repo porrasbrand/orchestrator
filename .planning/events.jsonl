@@ -27,3 +27,10 @@
 {"ts":"2026-04-04T15:00:45Z","event":"phase_response","data":{"phase":"01-structured-results","task_id":"1775314524375"}}
 {"ts":"2026-04-04T15:00:45Z","event":"smoke_test_pass","data":{"phase":"01-structured-results","tests_passed":6,"tests_total":6}}
 {"ts":"2026-04-04T15:00:45Z","event":"phase_complete","data":{"phase":"01-structured-results","commit":"202726a"}}
+{"ts":"2026-04-04T15:02:07Z","event":"phase_specified","data":{"phase":"02-executable-smoke-tests"}}
+{"ts":"2026-04-04T15:02:07Z","event":"phase_queued","data":{"phase":"02-executable-smoke-tests","task_id":"1775314919486","worker":"hetzner"}}
+{"ts":"2026-04-04T15:05:41Z","event":"phase_response","data":{"phase":"02-executable-smoke-tests","task_id":"1775314919486"}}
+{"ts":"2026-04-04T15:05:41Z","event":"smoke_test_pass","data":{"phase":"02-executable-smoke-tests","tests_passed":6,"tests_total":6}}
+{"ts":"2026-04-04T15:05:41Z","event":"regression_pass","data":{"phase":"02-executable-smoke-tests","previous_phases":["01-structured-results"]}}
+{"ts":"2026-04-04T15:05:41Z","event":"phase_complete","data":{"phase":"02-executable-smoke-tests","commit":"e92d495"}}
+{"ts":"2026-04-04T15:05:41Z","event":"checkpoint","data":{"phases_complete":2,"phases_total":4}}
