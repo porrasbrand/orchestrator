@@ -40,6 +40,73 @@ case "$PROJECT_STATUS" in
   *) STATUS_COLOR="#3b82f6" ;;
 esac
 
+# Convert ISO timestamp to epoch seconds
+ts_to_epoch() {
+  local ts="$1"
+  date -d "${ts/Z/+0000}" +%s 2>/dev/null || echo "0"
+}
+
+# Format seconds to human readable
+format_duration() {
+  local secs="$1"
+  if [ "$secs" -lt 60 ]; then
+    echo "${secs}s"
+  elif [ "$secs" -lt 3600 ]; then
+    local mins=$((secs / 60))
+    local remaining=$((secs % 60))
+    printf "%dm %02ds" "$mins" "$remaining"
+  else
+    local hours=$((secs / 3600))
+    local mins=$(((secs % 3600) / 60))
+    printf "%dh %02dm" "$hours" "$mins"
+  fi
+}
+
+# Calculate phase duration from events
+get_phase_duration() {
+  local phase="$1"
+  if [ ! -f "$EVENTS_FILE" ]; then
+    echo "-"
+    return
+  fi
+  local queued_ts=$(grep "phase_queued" "$EVENTS_FILE" 2>/dev/null | grep "\"$phase\"" | head -1 | jq -r '.ts // ""')
+  local complete_ts=$(grep "phase_complete" "$EVENTS_FILE" 2>/dev/null | grep "\"$phase\"" | head -1 | jq -r '.ts // ""')
+  if [ -n "$queued_ts" ] && [ -n "$complete_ts" ]; then
+    local queued_epoch=$(ts_to_epoch "$queued_ts")
+    local complete_epoch=$(ts_to_epoch "$complete_ts")
+    if [ "$queued_epoch" -gt 0 ] && [ "$complete_epoch" -gt 0 ]; then
+      local duration=$((complete_epoch - queued_epoch))
+      format_duration "$duration"
+      return
+    fi
+  fi
+  echo "-"
+}
+
+# Calculate total timing stats
+calculate_timing_stats() {
+  local total_secs=0
+  local count=0
+  if [ ! -f "$EVENTS_FILE" ]; then
+    echo "0|0"
+    return
+  fi
+  while IFS= read -r phase; do
+    local queued_ts=$(grep "phase_queued" "$EVENTS_FILE" 2>/dev/null | grep "\"$phase\"" | head -1 | jq -r '.ts // ""')
+    local complete_ts=$(grep "phase_complete" "$EVENTS_FILE" 2>/dev/null | grep "\"$phase\"" | head -1 | jq -r '.ts // ""')
+    if [ -n "$queued_ts" ] && [ -n "$complete_ts" ]; then
+      local queued_epoch=$(ts_to_epoch "$queued_ts")
+      local complete_epoch=$(ts_to_epoch "$complete_ts")
+      if [ "$queued_epoch" -gt 0 ] && [ "$complete_epoch" -gt 0 ]; then
+        local duration=$((complete_epoch - queued_epoch))
+        total_secs=$((total_secs + duration))
+        count=$((count + 1))
+      fi
+    fi
+  done <<< "$(jq -r '.phases | keys[]' "$STATUS_FILE")"
+  echo "$total_secs|$count"
+}
+
 # Generate phase rows
 generate_phase_rows() {
   jq -r '.phases | to_entries | sort_by(.key) | .[] |
@@ -59,12 +126,16 @@ generate_phase_rows() {
       highlight="border-left: 4px solid #3b82f6;"
     fi
 
+    # Get timing for this phase
+    timing=$(get_phase_duration "$name")
+
     echo "<tr style=\"$highlight\">"
     echo "  <td style=\"font-weight:500;\">$name</td>"
     echo "  <td><span style=\"background:$bg;color:$color;padding:2px 8px;border-radius:4px;font-size:12px;\">$status</span></td>"
     echo "  <td style=\"font-family:monospace;font-size:12px;\">$commit</td>"
     echo "  <td>$tests</td>"
     echo "  <td>$revisions</td>"
+    echo "  <td style=\"font-family:monospace;font-size:12px;\">$timing</td>"
     echo "</tr>"
   done
 }
@@ -102,6 +173,19 @@ generate_event_timeline() {
   done
   echo "</div>"
 }
+
+# Calculate timing stats
+TIMING_STATS=$(calculate_timing_stats)
+TOTAL_TIME_SECS=$(echo "$TIMING_STATS" | cut -d'|' -f1)
+TIMED_PHASES=$(echo "$TIMING_STATS" | cut -d'|' -f2)
+if [ "$TIMED_PHASES" -gt 0 ]; then
+  TOTAL_TIME_STR=$(format_duration "$TOTAL_TIME_SECS")
+  AVG_TIME_SECS=$((TOTAL_TIME_SECS / TIMED_PHASES))
+  AVG_TIME_STR=$(format_duration "$AVG_TIME_SECS")
+else
+  TOTAL_TIME_STR="-"
+  AVG_TIME_STR="-"
+fi
 
 # Generate HTML
 cat > "$OUTPUT_FILE" << EOF
@@ -229,6 +313,7 @@ cat > "$OUTPUT_FILE" << EOF
             <th>Commit</th>
             <th>Tests</th>
             <th>Revisions</th>
+            <th>Timing</th>
           </tr>
         </thead>
         <tbody>
@@ -261,6 +346,14 @@ $(generate_event_timeline)
       <div class="stat">
         <div class="stat-value">$TOTAL_SMOKE_TESTS</div>
         <div class="stat-label">Smoke Tests</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">$TOTAL_TIME_STR</div>
+        <div class="stat-label">Total Time</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">$AVG_TIME_STR</div>
+        <div class="stat-label">Avg/Phase</div>
       </div>
     </div>
   </div>
