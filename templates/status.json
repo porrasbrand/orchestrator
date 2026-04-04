@@ -1,0 +1,21 @@
+{
+  "project": "",
+  "created": "",
+  "updated": "",
+  "status": "initializing",
+  "current_phase": null,
+  "checkpoint_frequency": 3,
+  "phases_since_checkpoint": 0,
+  "target_worker": "hetzner",
+  "phases": {},
+  "execution_order": [],
+  "blocked": false,
+  "blocked_reason": null,
+  "metrics": {
+    "phases_complete": 0,
+    "phases_total": 0,
+    "total_revisions": 0,
+    "total_smoke_tests": 0,
+    "started_at": null
+  }
+}
