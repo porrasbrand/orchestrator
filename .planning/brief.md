@@ -1,15 +1,14 @@
-# Sprint 4: Scaling Foundation — Project Brief
+# Sprint 5: Parallel Execution — Project Brief
 
 ## What
-Prepare the orchestrator for parallel execution and multi-worker scaling with 5 enhancements:
-1. **Worker registry** — Config-driven worker list replacing hardcoded SSH paths in scripts
-2. **Dependency DAG** — Script that reads status.json and identifies parallelizable phases
-3. **Branch-per-phase** — Git workflow where each phase works on its own branch, merged after verification
-4. **Status web page** — Static HTML dashboard generated from status.json + events.jsonl
-5. **Per-phase cost tracking** — Wall-clock time per phase stored in events.jsonl, summarized in status page
+Enable the orchestrator to dispatch independent phases to multiple workers simultaneously, merge results, and verify everything works together. 4 enhancements:
+1. **Parallel dispatch** — Orchestrator identifies independent phases via dag.sh and queues them to different workers at the same time
+2. **Merge orchestration** — After parallel phases complete, merge phase branches in dependency order with conflict detection
+3. **Worker load balancing** — Route phases to least-busy worker based on current queue depth
+4. **Parallel regression testing** — After merging parallel work, run ALL smoke tests from ALL completed phases as one batch
 
 ## Why
-Currently we have 2 workers but can only use 1 at a time. Adding a new worker means editing multiple scripts. There's no visibility into progress from outside the terminal, and no data on what phases actually cost. These 5 items build the foundation needed before Sprint 5 (parallel execution).
+This is the payoff for Sprints 1-4. We now have: worker registry (know who's available), dependency DAG (know what's parallel), branch-per-phase (isolated work), and status page (visibility). The missing piece is actually running phases in parallel — which would give 2-3x speedup on projects with independent tracks.
 
 ## Where
 - Project path: `~/awsc-new/awesome/orchestrator/` (on >>hetzner)
@@ -18,24 +17,23 @@ Currently we have 2 workers but can only use 1 at a time. Adding a new worker me
 
 ## Boundaries
 - Do NOT modify CLAUDE.md or PLAN.md
-- Do NOT add npm dependencies — bash + node built-ins + jq only
-- Do NOT implement actual parallel execution (Sprint 5)
-- Keep backwards-compatible with existing .planning/ directories
-- Worker registry is read-only config — scripts read it, don't modify it
+- Do NOT add npm dependencies — bash + jq + node built-ins only
+- These are TOOLING scripts the orchestrator can use — they don't change how the orchestrator loop works (that's in CLAUDE.md, a separate effort)
+- Keep backwards-compatible — sequential execution must still work
+- Load balancing is advisory (suggests worker), not mandatory
 
 ## Success Criteria
-- [ ] `config/workers.json` defines workers with name, host, port, user, ssh_key, capabilities, status
-- [ ] verify.sh reads worker config from registry instead of hardcoded if/else
-- [ ] `scripts/dag.sh` reads status.json and outputs which phases can run in parallel
-- [ ] Branch-per-phase workflow documented; helper script creates/merges phase branches
-- [ ] `scripts/generate-status-page.sh` produces self-contained HTML from status.json + events.jsonl
-- [ ] Events include `wall_clock_seconds` for completed phases
-- [ ] Status page shows phase timeline, pass/fail, revisions, timing
-- [ ] All existing scripts still work
+- [ ] `scripts/parallel-dispatch.sh` identifies ready parallel phases and queues them to different workers
+- [ ] `scripts/merge-phases.sh` merges completed phase branches in correct order
+- [ ] `scripts/select-worker.sh` picks least-busy worker from registry
+- [ ] `scripts/regression-test.sh` runs ALL previous smoke tests as one batch after merge
+- [ ] All scripts use existing tools (dag.sh, branch.sh, get-worker.sh, verify.sh)
+- [ ] Sequential execution still works (parallel is opt-in)
+- [ ] ENHANCEMENT-ROADMAP.md updated to mark Sprint 5 complete
 
 ## Access & Credentials
-- Already configured. SSH key auth. Git repo with Sprint 2+3 code.
+- Already configured. SSH key auth. Git repo with Sprint 1-4 code.
 
 ## Preferences
-- Tech stack: Bash + jq + node one-liners (match existing)
-- Checkpoint frequency: after phase 3 (5 phases total)
+- Tech stack: Bash + jq (match existing)
+- Checkpoint frequency: after phase 2 (4 phases total)

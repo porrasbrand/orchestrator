@@ -62,3 +62,5 @@
 {"ts":"2026-04-04T15:30:15Z","event":"phase_response","data":{"phase":"04-status-web-page","task_id":"1775316480652"}}
 {"ts":"2026-04-04T15:30:15Z","event":"smoke_test_pass","data":{"phase":"04-status-web-page","tests_passed":8,"tests_total":8}}
 {"ts":"2026-04-04T15:30:15Z","event":"phase_complete","data":{"phase":"04-status-web-page","commit":"c0c8c94"}}
+{"ts":"2026-04-04T15:39:43Z","event":"project_init","data":{"project":"orchestrator-sprint5","type":"existing","worker":"hetzner"}}
+{"ts":"2026-04-04T15:39:43Z","event":"plan_created","data":{"phases":4,"execution_order":["01-parallel-dispatch","02-merge-orchestration","03-worker-load-balancing","04-parallel-regression"]}}

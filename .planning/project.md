@@ -1,9 +1,9 @@
-# Sprint 4: Scaling Foundation — Level-0 Plan
+# Sprint 5: Parallel Execution — Level-0 Plan
 
-**Project:** orchestrator-sprint4
-**Sprint:** 4
-**Phases:** 5
-**Checkpoint:** After Phase 3
+**Project:** orchestrator-sprint5
+**Sprint:** 5
+**Phases:** 4
+**Checkpoint:** After Phase 2
 
 ---
 
@@ -11,28 +11,29 @@
 
 | Phase | Name | Complexity | Depends On | Description |
 |-------|------|-----------|------------|-------------|
-| 01 | worker-registry | standard | — | Config file for workers; update verify.sh to read from it |
-| 02 | dependency-dag | standard | — | Script to analyze status.json and identify parallel opportunities |
-| 03 | branch-per-phase | standard | — | Helper script for phase branch creation and merge |
-| 04 | status-web-page | complex | — | Generate self-contained HTML dashboard from orchestration state |
-| 05 | cost-tracking | standard | 04 | Add wall-clock timing to events; include in status page |
+| 01 | parallel-dispatch | complex | — | Script to identify ready parallel phases and queue to different workers |
+| 02 | merge-orchestration | complex | 01 | Script to merge completed phase branches in dependency order |
+| 03 | worker-load-balancing | standard | — | Script to select least-busy worker from registry |
+| 04 | parallel-regression | standard | 02 | Script to run all previous smoke tests as one batch after merge |
 
 ## Execution Order
 
 ```
-Phase 01 (worker-registry)    ─┐
-Phase 02 (dependency-dag)      ├─ CHECKPOINT
-Phase 03 (branch-per-phase)   ─┘
-Phase 04 (status-web-page)    ─┐
-Phase 05 (cost-tracking)      ─┘
+Phase 01 (parallel-dispatch)       ─┐
+                                     ├─ CHECKPOINT
+Phase 02 (merge-orchestration)     ─┘
+Phase 03 (worker-load-balancing)   ─┐
+Phase 04 (parallel-regression)     ─┘
 ```
 
-Phases 01-03 are independent. Phase 05 depends on 04 (adds timing data to the status page).
+Phase 02 depends on 01 (merge needs dispatch to have happened first).
+Phase 04 depends on 02 (regression runs after merge).
+Phase 03 is independent.
 
 ## Architecture Decisions
 
-1. **workers.json is static config** — Not auto-discovered. User maintains it. Scripts read it with jq.
-2. **DAG script is advisory** — Outputs parallel opportunities but doesn't execute them. Sprint 5 will use this.
-3. **Branch-per-phase is opt-in** — Helper scripts available, but orchestrator doesn't enforce branching in v4.
-4. **Status page is self-contained HTML** — Single file, no external deps, inline CSS. Can be opened locally or published.
-5. **Cost tracking uses wall-clock only** — No token counting in v4 (requires API integration). Wall-clock time from events.jsonl timestamps.
+1. **parallel-dispatch.sh is a helper, not a daemon** — Orchestrator calls it to dispatch a batch of ready phases. It returns immediately after queuing (doesn't wait for results).
+2. **merge-phases.sh handles ordering** — Uses dag.sh dependency info to merge branches in correct topological order. Fails fast on conflict.
+3. **select-worker.sh is advisory** — Returns worker name. Orchestrator chooses whether to use suggestion.
+4. **regression-test.sh reuses verify.sh infrastructure** — Collects all smoke tests from all completed phase specs, runs them in sequence via SSH on the merged branch.
+5. **All scripts compose existing tools** — dag.sh, branch.sh, get-worker.sh, verify.sh. No new SSH logic.
