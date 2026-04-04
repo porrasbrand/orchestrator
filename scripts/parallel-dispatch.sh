@@ -60,7 +60,7 @@ if [ ${#READY_PHASES[@]} -eq 0 ]; then
   exit 0
 fi
 
-# Get active workers for round-robin assignment
+# Get active workers for load-balanced assignment
 ACTIVE_WORKERS=()
 if [ -f "$CONFIG_FILE" ]; then
   while IFS= read -r worker; do
@@ -75,10 +75,14 @@ fi
 
 echo "Active workers: ${ACTIVE_WORKERS[*]}"
 
+# Select primary worker using load balancing
+PRIMARY_WORKER=$(bash "$SCRIPT_DIR/select-worker.sh" 2>/dev/null) || PRIMARY_WORKER="${ACTIVE_WORKERS[0]}"
+echo "Primary worker (least busy): $PRIMARY_WORKER"
+
 # Create branches for each ready phase
 BRANCHES_CREATED=()
 ASSIGNMENTS=()
-worker_index=0
+use_primary=true
 
 for phase in "${READY_PHASES[@]}"; do
   echo "Creating branch for: $phase"
@@ -92,12 +96,23 @@ for phase in "${READY_PHASES[@]}"; do
 
   BRANCHES_CREATED+=("phase/$phase")
 
-  # Round-robin worker assignment
-  assigned_worker="${ACTIVE_WORKERS[$worker_index]}"
+  # Load-balanced worker assignment (alternate between workers for parallelism)
+  if [ "$use_primary" = true ]; then
+    assigned_worker="$PRIMARY_WORKER"
+    use_primary=false
+  else
+    # Use the other worker if multiple exist
+    for w in "${ACTIVE_WORKERS[@]}"; do
+      if [ "$w" != "$PRIMARY_WORKER" ]; then
+        assigned_worker="$w"
+        break
+      fi
+    done
+    # Fallback to primary if only one worker
+    [ -z "$assigned_worker" ] && assigned_worker="$PRIMARY_WORKER"
+    use_primary=true
+  fi
   ASSIGNMENTS+=("\"$phase\":\"$assigned_worker\"")
-
-  # Advance round-robin index
-  worker_index=$(( (worker_index + 1) % ${#ACTIVE_WORKERS[@]} ))
 done
 
 # Switch back to master
