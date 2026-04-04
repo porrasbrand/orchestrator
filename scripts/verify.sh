@@ -15,20 +15,17 @@ EVENTS_FILE="$PROJECT_PATH/.planning/events.jsonl"
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 PHASE_NAME=$(basename "$PHASE_DIR")
 
-SSH_KEY="$HOME/.ssh/id_remote_claude"
-SSH_OPTS="-i $SSH_KEY -o ConnectTimeout=10 -o ServerAliveInterval=5 -o StrictHostKeyChecking=no -o BatchMode=yes"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# SSH config per worker
-if [ "$WORKER" = "hetzner" ]; then
-  SSH_CMD="ssh remote.manuelporras.com -p 22 -l ubuntu $SSH_OPTS"
-  REMOTE_BASE="~/awsc-new/awesome"
-elif [ "$WORKER" = "wsl2" ]; then
-  SSH_CMD="ssh ssh.manuelporras.com -p 2222 -l ubuntu $SSH_OPTS"
-  REMOTE_BASE="~/awsc-new/awesome"
-else
-  echo "❌ Unknown worker: $WORKER (use hetzner or wsl2)"
+# Get worker config from registry
+SSH_CMD=$(bash "$SCRIPT_DIR/get-worker.sh" "$WORKER" ssh_cmd 2>&1) || {
+  echo "❌ $SSH_CMD"
   exit 1
-fi
+}
+REMOTE_BASE=$(bash "$SCRIPT_DIR/get-worker.sh" "$WORKER" base_path 2>&1) || {
+  echo "❌ $REMOTE_BASE"
+  exit 1
+}
 
 # Retry wrapper: run SSH command with 2 retries and backoff
 ssh_retry() {

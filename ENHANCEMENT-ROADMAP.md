@@ -72,7 +72,7 @@ Prepare for parallel execution and more workers. Don't scale yet — build the f
 
 | # | Enhancement | What | Why | Effort |
 |---|-------------|------|-----|--------|
-| 4.1 | **Worker registry** | `config/workers.json`: list of workers with name, ssh, capabilities, status. Scripts read from registry instead of hardcoded paths. | Adding a worker currently requires editing multiple scripts. | 2 hr |
+| 4.1 | **Worker registry** ✅ | `config/workers.json`: list of workers with name, ssh, capabilities, status. Scripts read from registry instead of hardcoded paths. | Adding a worker currently requires editing multiple scripts. | 2 hr | **DONE** |
 | 4.2 | **Dependency DAG** | Phase specs include `depends_on: [phase-ids]`. Orchestrator builds DAG and identifies parallelizable phases. | Required foundation for parallel execution. | 3 hr |
 | 4.3 | **Branch-per-phase** | Each phase works on `phase-XX-name` branch. Orchestrator merges to main after verification. | Multiple workers pushing to same branch = merge conflicts. | 3 hr |
 | 4.4 | **Status web page** | Generate static HTML from status.json + events.jsonl. Publish to manuelporras.com/orchestrator/. | Can't monitor progress from phone or share with others. | 3 hr |

@@ -1,0 +1,22 @@
+{
+  "workers": {
+    "hetzner": {
+      "host": "remote.manuelporras.com",
+      "port": 22,
+      "user": "ubuntu",
+      "ssh_key": "~/.ssh/id_remote_claude",
+      "base_path": "~/awsc-new/awesome",
+      "capabilities": ["node", "python", "git", "jq"],
+      "status": "active"
+    },
+    "wsl2": {
+      "host": "ssh.manuelporras.com",
+      "port": 2222,
+      "user": "ubuntu",
+      "ssh_key": "~/.ssh/id_remote_claude",
+      "base_path": "~/awsc-new/awesome",
+      "capabilities": ["node", "python", "git", "jq"],
+      "status": "active"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "status": "complete",
+  "files_created": [
+    "config/workers.json",
+    "scripts/get-worker.sh"
+  ],
+  "files_modified": [
+    "scripts/verify.sh",
+    "ENHANCEMENT-ROADMAP.md"
+  ],
+  "tests_run": [
+    {"name": "workers.json exists", "passed": true},
+    {"name": "get-worker.sh is executable", "passed": true},
+    {"name": "hetzner host returns correct value", "passed": true},
+    {"name": "wsl2 port returns 2222", "passed": true},
+    {"name": "ssh_cmd contains host", "passed": true},
+    {"name": "nonexistent worker fails", "passed": true},
+    {"name": "verify.sh uses get-worker.sh", "passed": true},
+    {"name": "4.1 marked as done", "passed": true}
+  ],
+  "blockers": [],
+  "summary": "Created worker registry (config/workers.json) and helper script (get-worker.sh). Updated verify.sh to use registry instead of hardcoded config."
+}
