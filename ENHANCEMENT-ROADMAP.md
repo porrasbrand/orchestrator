@@ -88,7 +88,7 @@ The big one. Requires Sprint 4 foundation.
 
 | # | Enhancement | What | Why | Effort |
 |---|-------------|------|-----|--------|
-| 5.1 | **Parallel dispatch** | Orchestrator queues independent phases simultaneously to different workers. | 2-3x faster for projects with independent tracks. | 4 hr |
+| 5.1 | **Parallel dispatch** ✅ | Orchestrator queues independent phases simultaneously to different workers. | 2-3x faster for projects with independent tracks. | 4 hr | **DONE** |
 | 5.2 | **Merge orchestration** | After parallel phases complete, orchestrator merges branches in dependency order. Handles conflicts. | Branch-per-phase needs coordinated merging. | 3 hr |
 | 5.3 | **Worker load balancing** | Route phases to least-busy worker based on queue depth / current task. | Prevents one worker being overloaded while another idles. | 2 hr |
 | 5.4 | **Parallel regression testing** | After merge, run ALL smoke tests from ALL completed phases as one batch. | Need to verify nothing broke during parallel work. | 2 hr |
