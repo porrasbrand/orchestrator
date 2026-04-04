@@ -85,6 +85,31 @@ else
 fi
 TOTAL=$((TOTAL+1))
 
+# Step 1b: Check result.json (optional, for structured verification)
+RESULT_JSON_PATH="$REMOTE_BASE/$(basename $PROJECT_PATH)/$PHASE_DIR/result.json"
+RESULT_JSON_EXISTS=$(ssh_retry "test -f $RESULT_JSON_PATH && echo YES || echo NO")
+if [ "$RESULT_JSON_EXISTS" = "YES" ]; then
+  echo "✅ result.json exists"
+  # Parse result.json with jq
+  RESULT_JSON=$(ssh_retry "cat $RESULT_JSON_PATH" 2>/dev/null || echo "{}")
+  JSON_STATUS=$(echo "$RESULT_JSON" | jq -r '.status // "unknown"' 2>/dev/null || echo "parse_error")
+  JSON_FILES_COUNT=$(echo "$RESULT_JSON" | jq -r '(.files_modified // []) + (.files_created // []) | length' 2>/dev/null || echo "0")
+  JSON_TESTS_TOTAL=$(echo "$RESULT_JSON" | jq -r '.tests_run | length' 2>/dev/null || echo "0")
+  JSON_TESTS_PASSED=$(echo "$RESULT_JSON" | jq -r '[.tests_run[] | select(.passed == true)] | length' 2>/dev/null || echo "0")
+  echo "   Result JSON: status=$JSON_STATUS, $JSON_FILES_COUNT files changed, $JSON_TESTS_PASSED/$JSON_TESTS_TOTAL tests passed"
+
+  # Check for blockers
+  BLOCKERS=$(echo "$RESULT_JSON" | jq -r '.blockers[]?' 2>/dev/null)
+  if [ -n "$BLOCKERS" ]; then
+    echo "   ⚠️  Blockers reported:"
+    echo "$BLOCKERS" | while read -r blocker; do
+      [ -n "$blocker" ] && echo "      - $blocker"
+    done
+  fi
+else
+  echo "ℹ️  result.json not found (optional, falling back to result.md only)"
+fi
+
 # Step 1.5: Diff-Based Scope Check
 echo ""
 echo "--- Scope Check ---"

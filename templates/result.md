@@ -1,5 +1,7 @@
 # Phase XX: <Phase Name> — COMPLETED
 
+> **Note:** Also write `result.json` alongside this file for machine-readable verification. See `templates/result-schema.md` for schema.
+
 ## Implementation Date
 [YYYY-MM-DD]
 

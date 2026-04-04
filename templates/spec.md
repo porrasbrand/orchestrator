@@ -48,6 +48,7 @@ Run these AFTER implementation to verify the phase works:
 
 ## Completion Instructions
 1. Run all smoke tests above and confirm they pass
-2. Write result to: `.planning/phases/XX-<name>/result.md`
-3. Commit all changes with prefix: `[<project>-XX]`
-4. Push to origin
+2. Write `result.json` alongside `result.md` (see `templates/result-schema.md` for schema)
+3. Write result to: `.planning/phases/XX-<name>/result.md`
+4. Commit all changes with prefix: `[<project>-XX]`
+5. Push to origin
