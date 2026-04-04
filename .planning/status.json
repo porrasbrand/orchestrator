@@ -33,9 +33,11 @@
       "smoke_tests_total": 6
     },
     "03-spec-quality-check": {
-      "status": "pending",
+      "status": "queued",
       "complexity": "standard",
       "depends_on": ["02-context-handoff"],
+      "queued_at": "2026-04-04T16:50:00Z",
+      "task_id": "1775313002376",
       "revisions": 0
     },
     "04-diff-verification": {
