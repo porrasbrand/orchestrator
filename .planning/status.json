@@ -3,12 +3,12 @@
   "created": "2026-04-04",
   "updated": "2026-04-04",
   "status": "in-progress",
-  "current_phase": "01-parallel-dispatch",
+  "current_phase": "02-merge-orchestration",
   "checkpoint_frequency": 2,
   "phases_since_checkpoint": 0,
   "target_worker": "hetzner",
   "phases": {
-    "01-parallel-dispatch": { "status": "pending", "complexity": "complex", "depends_on": [], "revisions": 0 },
+    "01-parallel-dispatch": { "status": "complete", "complexity": "complex", "depends_on": [], "revisions": 0, "commit": "cc38843", "smoke_tests_passed": 6, "smoke_tests_total": 6 },
     "02-merge-orchestration": { "status": "pending", "complexity": "complex", "depends_on": ["01-parallel-dispatch"], "revisions": 0 },
     "03-worker-load-balancing": { "status": "pending", "complexity": "standard", "depends_on": [], "revisions": 0 },
     "04-parallel-regression": { "status": "pending", "complexity": "standard", "depends_on": ["02-merge-orchestration"], "revisions": 0 }
@@ -16,5 +16,5 @@
   "execution_order": ["01-parallel-dispatch", "02-merge-orchestration", "03-worker-load-balancing", "04-parallel-regression"],
   "blocked": false,
   "blocked_reason": null,
-  "metrics": { "phases_complete": 0, "phases_total": 4, "total_revisions": 0, "total_smoke_tests": 0, "started_at": "2026-04-04T17:55:00Z" }
+  "metrics": { "phases_complete": 1, "phases_total": 4, "total_revisions": 0, "total_smoke_tests": 6, "started_at": "2026-04-04T17:55:00Z" }
 }
