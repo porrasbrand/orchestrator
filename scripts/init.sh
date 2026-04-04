@@ -46,11 +46,19 @@ EOF
   echo "✅ Created status.json"
 fi
 
-# Initialize learnings.md
+# Initialize learnings.jsonl (source of truth)
+if [ ! -f "$PROJECT_PATH/.planning/learnings.jsonl" ]; then
+  touch "$PROJECT_PATH/.planning/learnings.jsonl"
+  echo "✅ Created learnings.jsonl"
+fi
+
+# Initialize learnings.md (human-readable view)
 if [ ! -f "$PROJECT_PATH/.planning/learnings.md" ]; then
   echo "# Learnings" > "$PROJECT_PATH/.planning/learnings.md"
   echo "" >> "$PROJECT_PATH/.planning/learnings.md"
   echo "Discoveries made during execution that inform future phases." >> "$PROJECT_PATH/.planning/learnings.md"
+  echo "" >> "$PROJECT_PATH/.planning/learnings.md"
+  echo "*No learnings recorded yet.*" >> "$PROJECT_PATH/.planning/learnings.md"
   echo "✅ Created learnings.md"
 fi
 
