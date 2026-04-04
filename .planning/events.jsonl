@@ -51,3 +51,9 @@
 {"ts":"2026-04-04T15:23:25Z","event":"phase_response","data":{"phase":"02-dependency-dag","task_id":"1775316086277"}}
 {"ts":"2026-04-04T15:23:25Z","event":"smoke_test_pass","data":{"phase":"02-dependency-dag","tests_passed":6,"tests_total":6}}
 {"ts":"2026-04-04T15:23:25Z","event":"phase_complete","data":{"phase":"02-dependency-dag","commit":"5cdb760"}}
+{"ts":"2026-04-04T15:24:38Z","event":"phase_specified","data":{"phase":"03-branch-per-phase"}}
+{"ts":"2026-04-04T15:24:38Z","event":"phase_queued","data":{"phase":"03-branch-per-phase","task_id":"1775316270901","worker":"hetzner"}}
+{"ts":"2026-04-04T15:26:40Z","event":"phase_response","data":{"phase":"03-branch-per-phase","task_id":"1775316270901"}}
+{"ts":"2026-04-04T15:26:40Z","event":"smoke_test_pass","data":{"phase":"03-branch-per-phase","tests_passed":5,"tests_total":5}}
+{"ts":"2026-04-04T15:26:40Z","event":"phase_complete","data":{"phase":"03-branch-per-phase","commit":"f42e512"}}
+{"ts":"2026-04-04T15:26:40Z","event":"checkpoint","data":{"phases_complete":3,"phases_total":5}}
