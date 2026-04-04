@@ -3,13 +3,13 @@
   "created": "2026-04-04",
   "updated": "2026-04-04",
   "status": "in-progress",
-  "current_phase": "02-dependency-dag",
+  "current_phase": "03-branch-per-phase",
   "checkpoint_frequency": 3,
-  "phases_since_checkpoint": 0,
+  "phases_since_checkpoint": 2,
   "target_worker": "hetzner",
   "phases": {
     "01-worker-registry": { "status": "complete", "complexity": "standard", "depends_on": [], "revisions": 0, "commit": "5cdd760", "smoke_tests_passed": 8, "smoke_tests_total": 8 },
-    "02-dependency-dag": { "status": "pending", "complexity": "standard", "depends_on": [], "revisions": 0 },
+    "02-dependency-dag": { "status": "complete", "complexity": "standard", "depends_on": [], "revisions": 0, "commit": "5cdb760", "smoke_tests_passed": 6, "smoke_tests_total": 6 },
     "03-branch-per-phase": { "status": "pending", "complexity": "standard", "depends_on": [], "revisions": 0 },
     "04-status-web-page": { "status": "pending", "complexity": "complex", "depends_on": [], "revisions": 0 },
     "05-cost-tracking": { "status": "pending", "complexity": "standard", "depends_on": ["04-status-web-page"], "revisions": 0 }
@@ -17,5 +17,5 @@
   "execution_order": ["01-worker-registry", "02-dependency-dag", "03-branch-per-phase", "04-status-web-page", "05-cost-tracking"],
   "blocked": false,
   "blocked_reason": null,
-  "metrics": { "phases_complete": 1, "phases_total": 5, "total_revisions": 0, "total_smoke_tests": 8, "started_at": "2026-04-04T17:45:00Z" }
+  "metrics": { "phases_complete": 2, "phases_total": 5, "total_revisions": 0, "total_smoke_tests": 14, "started_at": "2026-04-04T17:45:00Z" }
 }
