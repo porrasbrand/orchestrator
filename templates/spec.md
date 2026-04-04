@@ -38,6 +38,9 @@ Files this phase should create or modify. Verification will warn if other files 
 ## Smoke Tests
 Run these AFTER implementation to verify the phase works:
 
+> **Optional:** Instead of inline tests below, create an executable `smoke-tests.sh` in the phase
+> directory (see `templates/smoke-tests-template.sh`). verify.sh will run it automatically.
+
 ```bash
 # Test 1: [description]
 [command] → expect [expected output]

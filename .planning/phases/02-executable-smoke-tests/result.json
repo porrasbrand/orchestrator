@@ -1,0 +1,21 @@
+{
+  "status": "complete",
+  "files_created": [
+    "templates/smoke-tests-template.sh"
+  ],
+  "files_modified": [
+    "scripts/verify.sh",
+    "templates/spec.md",
+    "ENHANCEMENT-ROADMAP.md"
+  ],
+  "tests_run": [
+    {"name": "smoke-tests-template.sh is executable", "passed": true},
+    {"name": "verify.sh references smoke-tests.sh", "passed": true},
+    {"name": "verify.sh has >= 2 references", "passed": true},
+    {"name": "spec.md mentions smoke-tests.sh", "passed": true},
+    {"name": "ENHANCEMENT-ROADMAP.md shows 3.2 done", "passed": true},
+    {"name": "template exits with code 1", "passed": true}
+  ],
+  "blockers": [],
+  "summary": "Added executable smoke test support to verify.sh. Scripts in phase directories are auto-detected and run, with fallback to markdown parsing for backwards compatibility."
+}

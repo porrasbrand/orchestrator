@@ -153,11 +153,44 @@ else
   echo "Scope Check: skipped (no Expected Files Changed in spec)"
 fi
 
-# Step 2: Extract and run smoke tests from spec.md
-echo ""
-echo "--- Smoke Tests ---"
+# Step 1.7: Check for executable smoke-tests.sh
+SMOKE_SCRIPT_PATH="$REMOTE_BASE/$(basename $PROJECT_PATH)/$PHASE_DIR/smoke-tests.sh"
+SMOKE_SCRIPT_EXISTS=$(ssh_retry "test -x $SMOKE_SCRIPT_PATH && echo YES || echo NO")
+USE_SCRIPT_TESTS=0
 
-if [ -f "$SPEC_FILE" ]; then
+if [ "$SMOKE_SCRIPT_EXISTS" = "YES" ]; then
+  echo ""
+  echo "--- Smoke Tests (executable script) ---"
+  USE_SCRIPT_TESTS=1
+
+  # Run smoke-tests.sh via SSH
+  SMOKE_OUTPUT=$(ssh_retry "cd $REMOTE_BASE/$(basename $PROJECT_PATH) && bash $PHASE_DIR/smoke-tests.sh 2>&1") || SMOKE_EXIT=$?
+  SMOKE_EXIT=${SMOKE_EXIT:-0}
+
+  echo "$SMOKE_OUTPUT"
+
+  # Count pass/fail from output
+  SCRIPT_PASS=$(echo "$SMOKE_OUTPUT" | grep -c "✅" || echo 0)
+  SCRIPT_FAIL=$(echo "$SMOKE_OUTPUT" | grep -c "❌" || echo 0)
+
+  PASS=$((PASS + SCRIPT_PASS))
+  FAIL=$((FAIL + SCRIPT_FAIL))
+  TOTAL=$((TOTAL + SCRIPT_PASS + SCRIPT_FAIL))
+
+  # Log to events
+  echo "{\"ts\":\"$NOW\",\"event\":\"smoke_tests_run\",\"data\":{\"phase\":\"$PHASE_NAME\",\"method\":\"script\",\"pass\":$SCRIPT_PASS,\"fail\":$SCRIPT_FAIL,\"exit_code\":$SMOKE_EXIT}}" >> "$EVENTS_FILE"
+fi
+
+# Step 2: Extract and run smoke tests from spec.md (skip if script was used)
+if [ $USE_SCRIPT_TESTS -eq 0 ]; then
+  echo ""
+  echo "--- Smoke Tests (markdown) ---"
+
+  # Log method used
+  echo "{\"ts\":\"$NOW\",\"event\":\"smoke_tests_run\",\"data\":{\"phase\":\"$PHASE_NAME\",\"method\":\"markdown\"}}" >> "$EVENTS_FILE"
+fi
+
+if [ $USE_SCRIPT_TESTS -eq 0 ] && [ -f "$SPEC_FILE" ]; then
   IN_SMOKE=0
   while IFS= read -r line; do
     if echo "$line" | grep -q "^## Smoke Tests"; then
