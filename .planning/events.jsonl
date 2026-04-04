@@ -6,3 +6,9 @@
 {"ts":"2026-04-04T14:22:02Z","event":"phase_response","data":{"phase":"01-structured-learnings","task_id":"1775312326906"}}
 {"ts":"2026-04-04T14:22:02Z","event":"smoke_test_pass","data":{"phase":"01-structured-learnings","tests_passed":7,"tests_total":7}}
 {"ts":"2026-04-04T14:22:02Z","event":"phase_complete","data":{"phase":"01-structured-learnings","commit":"e63df4b"}}
+{"ts":"2026-04-04T14:24:29Z","event":"phase_specified","data":{"phase":"02-context-handoff"}}
+{"ts":"2026-04-04T14:24:29Z","event":"phase_queued","data":{"phase":"02-context-handoff","task_id":"1775312660236","worker":"hetzner"}}
+{"ts":"2026-04-04T14:26:16Z","event":"phase_response","data":{"phase":"02-context-handoff","task_id":"1775312660236"}}
+{"ts":"2026-04-04T14:26:16Z","event":"smoke_test_pass","data":{"phase":"02-context-handoff","tests_passed":6,"tests_total":6}}
+{"ts":"2026-04-04T14:26:16Z","event":"phase_complete","data":{"phase":"02-context-handoff","commit":"3f5ee9b"}}
+{"ts":"2026-04-04T14:26:16Z","event":"checkpoint","data":{"phases_complete":2,"phases_total":4}}
