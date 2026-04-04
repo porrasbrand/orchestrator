@@ -51,7 +51,7 @@ Make the orchestrator smarter — catch problems earlier, learn from history.
 
 ---
 
-### Sprint 3: Structured Results & Verification (estimated: 1-2 days)
+### Sprint 3: Structured Results & Verification ✅ COMPLETE
 
 Replace fragile text parsing with machine-readable formats.
 
@@ -60,7 +60,7 @@ Replace fragile text parsing with machine-readable formats.
 | 3.1 | **Structured result.json** | DEV worker writes `result.json` alongside result.md: `{status, files_modified[], tests_run[], blockers[], summary}` | Currently parsing markdown for verification. Fragile. Claude can reliably output JSON. | 2 hr |
 | 3.2 | **Executable smoke tests** ✅ | Smoke tests as `.sh` scripts in phase dir (not markdown text). verify.sh runs them directly. Exit code 0 = pass. | Regex parsing of markdown smoke tests is brittle. Scripts are deterministic. | 3 hr | **DONE** |
 | 3.3 | **Cancellation mechanism** ✅ | Add `cancel-task.sh` — marks phase as CANCELLED in queue and events. Worker checks cancellation flag before starting. | No way to abort a bad spec once queued. Worker wastes full cycle. | 2 hr | **DONE** |
-| 3.4 | **Phase idempotency** | Add cleanup section to spec template. DEV runs cleanup before implementation. Re-running a phase produces same result. | Partial completions + reruns could create duplicate state. | 1 hr |
+| 3.4 | **Phase idempotency** ✅ | Add cleanup section to spec template. DEV runs cleanup before implementation. Re-running a phase produces same result. | Partial completions + reruns could create duplicate state. | 1 hr | **DONE** |
 
 **Acceptance criteria:** result.json parseable by verify.sh. Smoke test scripts execute and return proper exit codes. Cancel stops a queued-but-not-started phase.
 

@@ -109,6 +109,11 @@ else
   WARNINGS=$((WARNINGS+1))
 fi
 
+# Check optional sections (no warning if missing)
+if grep -q "^## Cleanup" "$SPEC_PATH"; then
+  echo "✅ Cleanup: present (optional)"
+fi
+
 # Summary
 echo ""
 if [ "$ERRORS" -gt 0 ]; then

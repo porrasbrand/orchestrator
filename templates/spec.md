@@ -26,6 +26,13 @@ DEV workers have clean context without needing to read all prior specs.]
 ## Do NOT Touch
 - [Files/systems that must remain unchanged]
 
+## Cleanup (optional)
+Run these commands BEFORE implementation to ensure idempotent re-runs:
+- `rm -f path/to/file-this-phase-creates` — remove previous partial output
+- `git checkout -- path/to/file` — reset file to pre-phase state
+
+[If this phase is safe to re-run without cleanup, write "No cleanup needed."]
+
 ## Expected Files Changed
 Files this phase should create or modify. Verification will warn if other files are touched.
 - `path/to/file.js` (create | modify) — [purpose]
