@@ -14,3 +14,9 @@
 {"ts":"2026-04-04T14:26:16Z","event":"checkpoint","data":{"phases_complete":2,"phases_total":4}}
 {"ts":"2026-04-04T14:30:11Z","event":"phase_specified","data":{"phase":"03-spec-quality-check"}}
 {"ts":"2026-04-04T14:30:11Z","event":"phase_queued","data":{"phase":"03-spec-quality-check","task_id":"1775313002376","worker":"hetzner"}}
+{"ts":"2026-04-04T14:43:44Z","event":"smoke_test_fail","data":{"phase":"03-spec-quality-check","test":"good spec should pass","expected":"EXIT:0","actual":"EXIT:1"}}
+{"ts":"2026-04-04T14:43:44Z","event":"phase_revision","data":{"phase":"03-spec-quality-check","revision":1,"task_id":"1775313815433","reason":"smoke test detection fails on real specs"}}
+{"ts":"2026-04-04T14:46:05Z","event":"phase_response","data":{"phase":"03-spec-quality-check","task_id":"1775313815433","revision":1}}
+{"ts":"2026-04-04T14:46:05Z","event":"smoke_test_pass","data":{"phase":"03-spec-quality-check","tests_passed":6,"tests_total":6}}
+{"ts":"2026-04-04T14:46:05Z","event":"regression_pass","data":{"phase":"03-spec-quality-check","previous_phases":["01-structured-learnings"]}}
+{"ts":"2026-04-04T14:46:05Z","event":"phase_complete","data":{"phase":"03-spec-quality-check","commit":"52670ab","revisions":1}}
