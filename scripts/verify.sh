@@ -85,6 +85,49 @@ else
 fi
 TOTAL=$((TOTAL+1))
 
+# Step 1.5: Diff-Based Scope Check
+echo ""
+echo "--- Scope Check ---"
+
+SCOPE_WARNINGS=0
+if grep -q "^## Expected Files Changed$" "$SPEC_FILE" 2>/dev/null; then
+  # Extract expected files from spec (lines like "- `path/to/file`")
+  EXPECTED_FILES=$(sed -n '/^## Expected Files Changed$/,/^## /p' "$SPEC_FILE" | grep -oE '\`[^\`]+\`' | tr -d '`' | sort -u)
+  EXPECTED_COUNT=$(echo "$EXPECTED_FILES" | grep -c '.' || echo 0)
+
+  # Get actual changed files from last commit on remote
+  REMOTE_PROJECT="$REMOTE_BASE/$(basename $PROJECT_PATH)"
+  ACTUAL_FILES=$(ssh_retry "cd $REMOTE_PROJECT && git diff --name-only HEAD~1 2>/dev/null" || echo "")
+  ACTUAL_COUNT=$(echo "$ACTUAL_FILES" | grep -c '.' 2>/dev/null || echo 0)
+
+  echo "Expected: $EXPECTED_COUNT files"
+  echo "Actual: $ACTUAL_COUNT files changed"
+
+  # Check each actual file
+  while IFS= read -r file; do
+    [ -z "$file" ] && continue
+
+    # Skip .planning/ files (always expected)
+    if echo "$file" | grep -q "^\.planning/"; then
+      echo "✅ $file (ignored - .planning/)"
+      continue
+    fi
+
+    # Check if file is in expected list
+    if echo "$EXPECTED_FILES" | grep -qF "$file"; then
+      echo "✅ $file (expected)"
+    else
+      echo "⚠️  $file (UNEXPECTED - not in expected files list)"
+      SCOPE_WARNINGS=$((SCOPE_WARNINGS+1))
+    fi
+  done <<< "$ACTUAL_FILES"
+
+  echo ""
+  echo "Scope warnings: $SCOPE_WARNINGS"
+else
+  echo "Scope Check: skipped (no Expected Files Changed in spec)"
+fi
+
 # Step 2: Extract and run smoke tests from spec.md
 echo ""
 echo "--- Smoke Tests ---"
