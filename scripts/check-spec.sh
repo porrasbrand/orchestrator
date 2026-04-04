@@ -64,14 +64,15 @@ else
   echo "✅ Acceptance Criteria: ${criteria_count} items"
 fi
 
-# Check Smoke Tests - extract section to EOF or next ##
-smoke_section=$(awk '/^## Smoke Tests$/,/^## [^S]|^$/{if(!/^## /)print}' "$SPEC_PATH" 2>/dev/null) || smoke_section=""
-# Also try simpler approach: everything after ## Smoke Tests
+# Check Smoke Tests - extract from ## Smoke Tests to next ## heading or EOF
+# Use sed to get section, then grep for test patterns
+smoke_section=$(sed -n '/^## Smoke Tests/,/^## [^S]/p' "$SPEC_PATH" 2>/dev/null | sed '1d;$d') || smoke_section=""
+# If that didn't work (section at EOF), try getting everything after ## Smoke Tests
 if [ -z "$smoke_section" ]; then
-  smoke_section=$(sed -n '/^## Smoke Tests$/,$p' "$SPEC_PATH" 2>/dev/null | tail -n +2) || smoke_section=""
+  smoke_section=$(sed -n '/^## Smoke Tests/,$p' "$SPEC_PATH" 2>/dev/null | sed '1d') || smoke_section=""
 fi
-# Look for patterns like "command → expect" or numbered test lines or backtick commands
-smoke_count=$(echo "$smoke_section" | grep -cE '(→|`.*`|^[0-9]+\.|expect)' 2>/dev/null) || smoke_count=0
+# Count lines with test indicators: numbered items, backticks, arrows, or "expect"
+smoke_count=$(echo "$smoke_section" | grep -cE '(→|`.+`|^[0-9]+\.|expect )' 2>/dev/null) || smoke_count=0
 if [ "$smoke_count" -eq 0 ]; then
   echo "❌ Smoke Tests: no test commands found (required)"
   ERRORS=$((ERRORS+1))
