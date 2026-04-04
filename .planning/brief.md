@@ -1,14 +1,15 @@
-# Sprint 3: Structured Results & Verification — Project Brief
+# Sprint 4: Scaling Foundation — Project Brief
 
 ## What
-Replace fragile text-based parsing with machine-readable formats across 4 enhancements:
-1. **Structured result.json** — DEV workers write machine-readable JSON result alongside result.md
-2. **Executable smoke tests** — Smoke tests as runnable `.sh` scripts instead of markdown text parsed by regex
-3. **Cancellation mechanism** — Ability to cancel a queued phase before the worker starts it
-4. **Phase idempotency** — Cleanup section in spec template so re-running a phase doesn't create duplicate state
+Prepare the orchestrator for parallel execution and multi-worker scaling with 5 enhancements:
+1. **Worker registry** — Config-driven worker list replacing hardcoded SSH paths in scripts
+2. **Dependency DAG** — Script that reads status.json and identifies parallelizable phases
+3. **Branch-per-phase** — Git workflow where each phase works on its own branch, merged after verification
+4. **Status web page** — Static HTML dashboard generated from status.json + events.jsonl
+5. **Per-phase cost tracking** — Wall-clock time per phase stored in events.jsonl, summarized in status page
 
 ## Why
-Sprint 2 improved spec quality and verification scope-checking. But verification still parses markdown with regex (brittle), smoke tests are text in spec.md (not executable), there's no way to cancel a bad spec once queued, and partial completions can leave dirty state. These 4 changes make the orchestrator more reliable and robust.
+Currently we have 2 workers but can only use 1 at a time. Adding a new worker means editing multiple scripts. There's no visibility into progress from outside the terminal, and no data on what phases actually cost. These 5 items build the foundation needed before Sprint 5 (parallel execution).
 
 ## Where
 - Project path: `~/awsc-new/awesome/orchestrator/` (on >>hetzner)
@@ -16,28 +17,25 @@ Sprint 2 improved spec quality and verification scope-checking. But verification
 - Orchestrated from: lipo-360
 
 ## Boundaries
-- Do NOT modify CLAUDE.md (separate effort)
-- Do NOT modify PLAN.md (historical document)
-- Do NOT touch add-task.sh or the super-agent messaging system
-- Do NOT add new npm dependencies — keep it bash + node built-ins
+- Do NOT modify CLAUDE.md or PLAN.md
+- Do NOT add npm dependencies — bash + node built-ins + jq only
+- Do NOT implement actual parallel execution (Sprint 5)
 - Keep backwards-compatible with existing .planning/ directories
-- Build on Sprint 2 work (use the new spec template sections, structured learnings, check-spec.sh)
+- Worker registry is read-only config — scripts read it, don't modify it
 
 ## Success Criteria
-- [ ] DEV workers can write `result.json` with schema `{status, files_modified[], tests_run[], blockers[], summary}`
-- [ ] verify.sh reads result.json when present (falls back to result.md parsing)
-- [ ] Smoke tests can be defined as executable `.sh` scripts in phase directory
-- [ ] verify.sh runs `.sh` smoke test scripts when present (falls back to markdown parsing)
-- [ ] `scripts/cancel-task.sh` marks a phase as CANCELLED in events.jsonl and status.json
-- [ ] Spec template includes optional "Cleanup" section for idempotent re-runs
-- [ ] All existing scripts still work (init.sh, scan.sh, status.sh, verify.sh, update-learnings.sh, check-spec.sh)
-- [ ] ENHANCEMENT-ROADMAP.md updated to mark Sprint 3 items complete
+- [ ] `config/workers.json` defines workers with name, host, port, user, ssh_key, capabilities, status
+- [ ] verify.sh reads worker config from registry instead of hardcoded if/else
+- [ ] `scripts/dag.sh` reads status.json and outputs which phases can run in parallel
+- [ ] Branch-per-phase workflow documented; helper script creates/merges phase branches
+- [ ] `scripts/generate-status-page.sh` produces self-contained HTML from status.json + events.jsonl
+- [ ] Events include `wall_clock_seconds` for completed phases
+- [ ] Status page shows phase timeline, pass/fail, revisions, timing
+- [ ] All existing scripts still work
 
 ## Access & Credentials
-- Already configured. SSH key auth to hetzner. Git repo initialized with Sprint 2 code.
+- Already configured. SSH key auth. Git repo with Sprint 2+3 code.
 
 ## Preferences
-- Tech stack: Bash scripts + Node.js one-liners (match existing)
-- Code style: Match existing scripts
-- Testing: Manual verification via smoke tests
-- Checkpoint frequency: every 2 phases (4 phases total)
+- Tech stack: Bash + jq + node one-liners (match existing)
+- Checkpoint frequency: after phase 3 (5 phases total)

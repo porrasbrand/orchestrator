@@ -1,69 +1,21 @@
 {
-  "project": "orchestrator-sprint3",
+  "project": "orchestrator-sprint4",
   "created": "2026-04-04",
   "updated": "2026-04-04",
   "status": "in-progress",
-  "current_phase": "04-phase-idempotency",
-  "checkpoint_frequency": 2,
-  "phases_since_checkpoint": 1,
+  "current_phase": "01-worker-registry",
+  "checkpoint_frequency": 3,
+  "phases_since_checkpoint": 0,
   "target_worker": "hetzner",
   "phases": {
-    "01-structured-results": {
-      "status": "complete",
-      "complexity": "standard",
-      "depends_on": [],
-      "queued_at": "2026-04-04T17:15:00Z",
-      "completed_at": "2026-04-04T17:22:00Z",
-      "task_id": "1775314524375",
-      "commit": "202726a",
-      "revisions": 0,
-      "smoke_tests_passed": 6,
-      "smoke_tests_total": 6
-    },
-    "02-executable-smoke-tests": {
-      "status": "complete",
-      "complexity": "standard",
-      "depends_on": ["01-structured-results"],
-      "queued_at": "2026-04-04T17:25:00Z",
-      "completed_at": "2026-04-04T17:30:00Z",
-      "task_id": "1775314919486",
-      "commit": "e92d495",
-      "revisions": 0,
-      "smoke_tests_passed": 6,
-      "smoke_tests_total": 6
-    },
-    "03-cancellation": {
-      "status": "complete",
-      "complexity": "standard",
-      "depends_on": [],
-      "queued_at": "2026-04-04T17:35:00Z",
-      "completed_at": "2026-04-04T17:40:00Z",
-      "task_id": "1775315229035",
-      "commit": "1d88e7e",
-      "revisions": 0,
-      "smoke_tests_passed": 6,
-      "smoke_tests_total": 6
-    },
-    "04-phase-idempotency": {
-      "status": "queued",
-      "complexity": "standard",
-      "depends_on": [],
-      "revisions": 0
-    }
+    "01-worker-registry": { "status": "pending", "complexity": "standard", "depends_on": [], "revisions": 0 },
+    "02-dependency-dag": { "status": "pending", "complexity": "standard", "depends_on": [], "revisions": 0 },
+    "03-branch-per-phase": { "status": "pending", "complexity": "standard", "depends_on": [], "revisions": 0 },
+    "04-status-web-page": { "status": "pending", "complexity": "complex", "depends_on": [], "revisions": 0 },
+    "05-cost-tracking": { "status": "pending", "complexity": "standard", "depends_on": ["04-status-web-page"], "revisions": 0 }
   },
-  "execution_order": [
-    "01-structured-results",
-    "02-executable-smoke-tests",
-    "03-cancellation",
-    "04-phase-idempotency"
-  ],
+  "execution_order": ["01-worker-registry", "02-dependency-dag", "03-branch-per-phase", "04-status-web-page", "05-cost-tracking"],
   "blocked": false,
   "blocked_reason": null,
-  "metrics": {
-    "phases_complete": 3,
-    "phases_total": 4,
-    "total_revisions": 0,
-    "total_smoke_tests": 18,
-    "started_at": "2026-04-04T17:15:00Z"
-  }
+  "metrics": { "phases_complete": 0, "phases_total": 5, "total_revisions": 0, "total_smoke_tests": 0, "started_at": "2026-04-04T17:45:00Z" }
 }
