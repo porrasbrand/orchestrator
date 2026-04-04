@@ -1,69 +1,51 @@
 {
-  "project": "orchestrator-sprint2",
+  "project": "orchestrator-sprint3",
   "created": "2026-04-04",
   "updated": "2026-04-04",
   "status": "in-progress",
-  "current_phase": "04-diff-verification",
+  "current_phase": "01-structured-results",
   "checkpoint_frequency": 2,
-  "phases_since_checkpoint": 1,
+  "phases_since_checkpoint": 0,
   "target_worker": "hetzner",
   "phases": {
-    "01-structured-learnings": {
-      "status": "complete",
-      "complexity": "standard",
-      "depends_on": [],
-      "queued_at": "2026-04-04T16:32:00Z",
-      "completed_at": "2026-04-04T16:42:00Z",
-      "task_id": "1775312326906",
-      "commit": "e63df4b",
-      "revisions": 0,
-      "smoke_tests_passed": 7,
-      "smoke_tests_total": 7
-    },
-    "02-context-handoff": {
-      "status": "complete",
-      "complexity": "standard",
-      "depends_on": [],
-      "queued_at": "2026-04-04T16:45:00Z",
-      "completed_at": "2026-04-04T16:48:00Z",
-      "task_id": "1775312660236",
-      "commit": "3f5ee9b",
-      "revisions": 0,
-      "smoke_tests_passed": 6,
-      "smoke_tests_total": 6
-    },
-    "03-spec-quality-check": {
-      "status": "complete",
-      "complexity": "standard",
-      "depends_on": ["02-context-handoff"],
-      "queued_at": "2026-04-04T16:50:00Z",
-      "completed_at": "2026-04-04T16:58:00Z",
-      "task_id": "1775313815433",
-      "commit": "52670ab",
-      "revisions": 1,
-      "smoke_tests_passed": 6,
-      "smoke_tests_total": 6
-    },
-    "04-diff-verification": {
+    "01-structured-results": {
       "status": "pending",
       "complexity": "standard",
-      "depends_on": ["02-context-handoff"],
+      "depends_on": [],
+      "revisions": 0
+    },
+    "02-executable-smoke-tests": {
+      "status": "pending",
+      "complexity": "standard",
+      "depends_on": ["01-structured-results"],
+      "revisions": 0
+    },
+    "03-cancellation": {
+      "status": "pending",
+      "complexity": "standard",
+      "depends_on": [],
+      "revisions": 0
+    },
+    "04-phase-idempotency": {
+      "status": "pending",
+      "complexity": "standard",
+      "depends_on": [],
       "revisions": 0
     }
   },
   "execution_order": [
-    "01-structured-learnings",
-    "02-context-handoff",
-    "03-spec-quality-check",
-    "04-diff-verification"
+    "01-structured-results",
+    "02-executable-smoke-tests",
+    "03-cancellation",
+    "04-phase-idempotency"
   ],
   "blocked": false,
   "blocked_reason": null,
   "metrics": {
-    "phases_complete": 3,
+    "phases_complete": 0,
     "phases_total": 4,
-    "total_revisions": 1,
-    "total_smoke_tests": 19,
-    "started_at": "2026-04-04T16:20:00Z"
+    "total_revisions": 0,
+    "total_smoke_tests": 0,
+    "started_at": "2026-04-04T17:15:00Z"
   }
 }

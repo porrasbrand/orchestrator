@@ -20,3 +20,5 @@
 {"ts":"2026-04-04T14:46:05Z","event":"smoke_test_pass","data":{"phase":"03-spec-quality-check","tests_passed":6,"tests_total":6}}
 {"ts":"2026-04-04T14:46:05Z","event":"regression_pass","data":{"phase":"03-spec-quality-check","previous_phases":["01-structured-learnings"]}}
 {"ts":"2026-04-04T14:46:05Z","event":"phase_complete","data":{"phase":"03-spec-quality-check","commit":"52670ab","revisions":1}}
+{"ts":"2026-04-04T14:54:18Z","event":"project_init","data":{"project":"orchestrator-sprint3","type":"existing","worker":"hetzner"}}
+{"ts":"2026-04-04T14:54:18Z","event":"plan_created","data":{"phases":4,"execution_order":["01-structured-results","02-executable-smoke-tests","03-cancellation","04-phase-idempotency"]}}

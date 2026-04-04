@@ -1,7 +1,7 @@
-# Sprint 2: Quality & Intelligence — Level-0 Plan
+# Sprint 3: Structured Results & Verification — Level-0 Plan
 
-**Project:** orchestrator
-**Sprint:** 2
+**Project:** orchestrator-sprint3
+**Sprint:** 3
 **Phases:** 4
 **Checkpoint:** After Phase 2
 
@@ -11,49 +11,48 @@
 
 | Phase | Name | Complexity | Depends On | Description |
 |-------|------|-----------|------------|-------------|
-| 01 | structured-learnings | standard | — | Replace learnings.md with learnings.jsonl schema + auto-generated markdown view |
-| 02 | context-handoff | standard | — | Add "Prior Work Summary" and "Expected Files Changed" sections to spec template |
-| 03 | spec-quality-check | standard | 02 | New script `check-spec.sh` that validates spec.md has required sections |
-| 04 | diff-verification | standard | 02 | Update verify.sh to check git diff against expected_files from spec |
+| 01 | structured-results | standard | — | Add result.json schema + template; update verify.sh to read JSON results |
+| 02 | executable-smoke-tests | standard | 01 | Support `.sh` smoke test scripts alongside markdown; verify.sh runs both |
+| 03 | cancellation | standard | — | New cancel-task.sh script; CANCELLED state in events + status |
+| 04 | phase-idempotency | standard | — | Add Cleanup section to spec template; document idempotency pattern |
 
 ## Execution Order
 
 ```
-Phase 01 (structured-learnings)  ─┐
-                                   ├─ CHECKPOINT ─── Phase 03 (spec-quality-check)
-Phase 02 (context-handoff)       ─┘                  Phase 04 (diff-verification)
+Phase 01 (structured-results)       ─┐
+                                      ├─ CHECKPOINT
+Phase 02 (executable-smoke-tests)   ─┘
+Phase 03 (cancellation)             ─┐
+Phase 04 (phase-idempotency)        ─┘
 ```
 
-Phases 01 and 02 are independent — could run in parallel (but sequential for v1).
-Phases 03 and 04 depend on Phase 02 (they validate/use the new spec sections).
+Phase 02 depends on 01 (needs result.json support before smoke test scripts can write structured output).
+Phases 03 and 04 are independent of each other and of 01/02.
 
 ## Architecture Decisions
 
-1. **learnings.jsonl schema:** `{ts, phase, category, discovery, impact}` — category enables filtering (e.g., "codebase", "api", "testing", "auth")
-2. **learnings.md auto-generation:** A helper in scripts/ reads learnings.jsonl and writes a formatted learnings.md. Both files coexist.
-3. **Spec template changes are additive:** New sections added to templates/spec.md. Existing specs without these sections still work (check-spec.sh warns, doesn't error).
-4. **expected_files is advisory:** verify.sh warns on out-of-scope changes but doesn't fail the phase (DEV may have legitimate reasons to touch extra files).
-5. **check-spec.sh is a pre-queue gate:** Orchestrator runs it before queuing. Warnings printed, errors block queuing.
+1. **result.json is optional** — verify.sh checks for it first, falls back to result.md. Older phases without result.json still work.
+2. **Smoke test scripts are optional** — If `phases/XX/smoke-tests.sh` exists, verify.sh runs it. Otherwise falls back to markdown parsing. Both can coexist.
+3. **Cancellation is local** — cancel-task.sh updates local .planning/ state. It does NOT kill a running Claude session (impossible). It marks the phase so orchestrator skips verification on response.
+4. **Cleanup section is advisory** — Template guidance for DEV workers. Not enforced by tooling (too complex for v3).
 
 ## Files to Create/Modify
 
-### Phase 01: structured-learnings
-- CREATE: `templates/learnings-schema.md` — documents the JSONL schema
-- MODIFY: `scripts/init.sh` — scaffold learnings.jsonl instead of (or alongside) learnings.md
-- CREATE: `scripts/update-learnings.sh` — appends structured entry to learnings.jsonl + regenerates learnings.md
+### Phase 01: structured-results
+- CREATE: `templates/result-schema.md` — documents result.json schema
+- MODIFY: `templates/result.md` — add note about result.json
+- MODIFY: `scripts/verify.sh` — read result.json for basic checks when present
+- MODIFY: `templates/spec.md` — update Completion Instructions to mention result.json
 
-### Phase 02: context-handoff
-- MODIFY: `templates/spec.md` — add "Prior Work Summary" section (max 500 words) + "Expected Files Changed" section
-- MODIFY: `ENHANCEMENT-ROADMAP.md` — mark 2.2 and partial 2.4 as done
+### Phase 02: executable-smoke-tests
+- CREATE: `templates/smoke-tests-template.sh` — example smoke test script
+- MODIFY: `scripts/verify.sh` — detect and run smoke-tests.sh from phase dir
+- MODIFY: `templates/spec.md` — add note about optional smoke-tests.sh
 
-### Phase 03: spec-quality-check
-- CREATE: `scripts/check-spec.sh` — validates spec.md sections, reports warnings/errors
-- MODIFY: `ENHANCEMENT-ROADMAP.md` — mark 2.3 as done
+### Phase 03: cancellation
+- CREATE: `scripts/cancel-task.sh` — marks phase as CANCELLED
+- No other files modified
 
-### Phase 04: diff-verification
-- MODIFY: `scripts/verify.sh` — add diff-check step after smoke tests
-- MODIFY: `ENHANCEMENT-ROADMAP.md` — mark Sprint 2 complete
-
-## Risks
-- **Backwards compatibility:** Old .planning/ dirs won't have learnings.jsonl. Scripts must handle missing files gracefully.
-- **Spec template bloat:** Adding sections increases spec size. Keep new sections concise with clear guidance.
+### Phase 04: phase-idempotency
+- MODIFY: `templates/spec.md` — add optional "Cleanup" section
+- MODIFY: `ENHANCEMENT-ROADMAP.md` — mark Sprint 3 complete
