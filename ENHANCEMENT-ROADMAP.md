@@ -97,17 +97,30 @@ The big one. Requires Sprint 4 foundation.
 
 ---
 
-## 🎉 All Sprints Complete (5/5)
+## Sprint 6: Spec Templating
 
-**Completed 2026-04-04.** The orchestrator enhancement roadmap is now fully implemented:
+Reduce boilerplate and improve consistency by providing typed phase templates.
+
+| # | Enhancement | What | Why | Effort |
+|---|-------------|------|-----|--------|
+| 6.1 | **Phase type templates** ✅ | Create `templates/phase-types/` with 6 typed templates: new-bash-script, modify-bash-script, config-change, documentation, bugfix, integration. Each has pre-filled sections and {{PLACEHOLDER}} vars. | Every spec repeats similar structure. Templates eliminate boilerplate and enforce consistency. | 2 hr | **DONE** |
+
+**Acceptance criteria:** All 6 templates exist with correct REQUIRED_VARS, sections match spec.md structure, and placeholders use {{VAR}} syntax.
+
+---
+
+## All Sprints Complete (6/6)
+
+**Completed 2026-04-08.** The orchestrator enhancement roadmap is now fully implemented:
 
 - **Sprint 1:** Reliability Fixes (SSH key auth, timeouts, delivery ACK)
 - **Sprint 2:** Quality & Intelligence (structured learnings, context handoff, spec quality check, diff verification)
 - **Sprint 3:** Structured Results (result.json, executable smoke tests, cancellation, idempotency)
 - **Sprint 4:** Scaling Foundation (worker registry, dependency DAG, branch-per-phase, status page, timing)
 - **Sprint 5:** Parallel Execution (parallel dispatch, merge orchestration, load balancing, regression testing)
+- **Sprint 6:** Spec Templating (phase type templates for 6 common patterns)
 
-Total: 22 enhancements across 5 sprints. The orchestrator is now production-ready for parallel multi-worker execution.
+Total: 23 enhancements across 6 sprints. The orchestrator is now production-ready for parallel multi-worker execution with templated spec generation.
 
 ---
 
