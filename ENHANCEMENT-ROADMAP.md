@@ -117,8 +117,9 @@ Improve verify.sh output quality so failures are actionable without manual inter
 |---|-------------|------|-----|--------|
 | 7.1 | **Verify.sh Error Clarity** ✅ | Contextual error messages with suggestions, failure summary block, machine-readable verification-report.json | Minimal error messages cost 30+ min per revision cycle. Clearer errors + suggested fixes cut revision time in half. | 3 hr | **DONE** |
 | 7.2 | **Notification Hooks** ✅ | `scripts/notify.sh` writes notifications to project files on events (phase complete/failed, verification failed, regression failed, project complete). Optional user hook via `config/notify-hook.sh`. | PM has no way to know when phases complete or fail without manually checking. | 2 hr | **DONE** |
+| 7.3 | **Auto-Rollback on Regression Failure** ✅ | `scripts/auto-rollback.sh` runs regression tests, and if they fail, auto-reverts the last merged phase with `git revert`. Updates status.json (`rolled_back`), logs to events.jsonl, notifies via notify.sh. Exits 2 on revert conflict for manual escalation. | If regression tests fail after merge, broken code stays on main. PM must manually investigate and revert. | 2 hr | **DONE** |
 
-**Acceptance criteria:** verify.sh prints actionable suggestions on failure, writes verification-report.json (valid JSON, parseable by jq), and provides copy-paste revision notes. notify.sh writes notifications.md + latest-notification.json and calls optional hook.
+**Acceptance criteria:** verify.sh prints actionable suggestions on failure, writes verification-report.json (valid JSON, parseable by jq), and provides copy-paste revision notes. notify.sh writes notifications.md + latest-notification.json and calls optional hook. auto-rollback.sh reverts last merge on regression failure, updates status to "rolled_back", and escalates on revert conflict.
 
 ---
 
