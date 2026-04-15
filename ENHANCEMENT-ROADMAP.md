@@ -116,8 +116,9 @@ Improve verify.sh output quality so failures are actionable without manual inter
 | # | Enhancement | What | Why | Effort |
 |---|-------------|------|-----|--------|
 | 7.1 | **Verify.sh Error Clarity** ✅ | Contextual error messages with suggestions, failure summary block, machine-readable verification-report.json | Minimal error messages cost 30+ min per revision cycle. Clearer errors + suggested fixes cut revision time in half. | 3 hr | **DONE** |
+| 7.2 | **Notification Hooks** ✅ | `scripts/notify.sh` writes notifications to project files on events (phase complete/failed, verification failed, regression failed, project complete). Optional user hook via `config/notify-hook.sh`. | PM has no way to know when phases complete or fail without manually checking. | 2 hr | **DONE** |
 
-**Acceptance criteria:** verify.sh prints actionable suggestions on failure, writes verification-report.json (valid JSON, parseable by jq), and provides copy-paste revision notes.
+**Acceptance criteria:** verify.sh prints actionable suggestions on failure, writes verification-report.json (valid JSON, parseable by jq), and provides copy-paste revision notes. notify.sh writes notifications.md + latest-notification.json and calls optional hook.
 
 ---
 
@@ -131,9 +132,9 @@ Improve verify.sh output quality so failures are actionable without manual inter
 - **Sprint 4:** Scaling Foundation (worker registry, dependency DAG, branch-per-phase, status page, timing)
 - **Sprint 5:** Parallel Execution (parallel dispatch, merge orchestration, load balancing, regression testing)
 - **Sprint 6:** Spec Templating (phase type templates for 6 common patterns)
-- **Sprint 7:** Verification Intelligence (contextual errors, failure summaries, verification-report.json)
+- **Sprint 7:** Verification Intelligence (contextual errors, failure summaries, verification-report.json, notification hooks)
 
-Total: 24 enhancements across 7 sprints. The orchestrator is now production-ready for parallel multi-worker execution with templated spec generation and actionable verification output.
+Total: 25 enhancements across 7 sprints. The orchestrator is now production-ready for parallel multi-worker execution with templated spec generation and actionable verification output.
 
 ---
 
