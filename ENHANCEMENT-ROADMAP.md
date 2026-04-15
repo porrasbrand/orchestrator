@@ -130,8 +130,9 @@ End-to-end testing of script chains to catch handoff bugs between interconnected
 | # | Enhancement | What | Why | Effort |
 |---|-------------|------|-----|--------|
 | 8.1 | **Integration Test Suite** ✅ | `scripts/integration-test.sh` tests the verify → notify → rollback chain end-to-end using mock SSH (PATH override). 4 scenarios: verify pass, verify fail, regression rollback, no-merge no-op. | Scripts were tested individually but never as a chain. Handoff bugs between verify/notify/rollback could go undetected until a real failure. | 3 hr | **DONE** |
+| 8.2 | **Worker Failover** ✅ | `scripts/failover.sh` monitors queued/in-progress phases and auto-re-queues to another worker if current worker is unreachable (3 retries) or phase exceeds timeout. `--check-only` mode for monitoring. Uses get-worker.sh + select-worker.sh. | If a worker goes down mid-phase, the phase stays queued forever. PM must manually detect timeout, cancel, and re-queue. | 2 hr | **DONE** |
 
-**Acceptance criteria:** All 4 scenarios pass with mock SSH, no network dependency, cleanup after test.
+**Acceptance criteria:** All 4 scenarios pass with mock SSH, no network dependency, cleanup after test. failover.sh detects worker-down and stale phases, selects alternative worker, updates status.json + events.jsonl, notifies via notify.sh.
 
 ---
 
