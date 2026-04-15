@@ -1,7 +1,7 @@
 {
   "status": "complete",
   "phase": "02-worker-failover",
-  "commit": "pending",
+  "commit": "da142e6",
   "files_modified": ["ENHANCEMENT-ROADMAP.md"],
   "files_created": ["scripts/failover.sh", ".planning/phases/02-worker-failover/result.md", ".planning/phases/02-worker-failover/result.json"],
   "tests_run": [
