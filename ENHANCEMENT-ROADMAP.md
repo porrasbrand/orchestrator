@@ -109,9 +109,21 @@ Reduce boilerplate and improve consistency by providing typed phase templates.
 
 ---
 
-## All Sprints Complete (6/6)
+### Sprint 7: Verification Intelligence
 
-**Completed 2026-04-08.** The orchestrator enhancement roadmap is now fully implemented:
+Improve verify.sh output quality so failures are actionable without manual interpretation.
+
+| # | Enhancement | What | Why | Effort |
+|---|-------------|------|-----|--------|
+| 7.1 | **Verify.sh Error Clarity** ✅ | Contextual error messages with suggestions, failure summary block, machine-readable verification-report.json | Minimal error messages cost 30+ min per revision cycle. Clearer errors + suggested fixes cut revision time in half. | 3 hr | **DONE** |
+
+**Acceptance criteria:** verify.sh prints actionable suggestions on failure, writes verification-report.json (valid JSON, parseable by jq), and provides copy-paste revision notes.
+
+---
+
+## All Sprints Complete (7/7)
+
+**Updated 2026-04-08.** The orchestrator enhancement roadmap is now fully implemented:
 
 - **Sprint 1:** Reliability Fixes (SSH key auth, timeouts, delivery ACK)
 - **Sprint 2:** Quality & Intelligence (structured learnings, context handoff, spec quality check, diff verification)
@@ -119,8 +131,9 @@ Reduce boilerplate and improve consistency by providing typed phase templates.
 - **Sprint 4:** Scaling Foundation (worker registry, dependency DAG, branch-per-phase, status page, timing)
 - **Sprint 5:** Parallel Execution (parallel dispatch, merge orchestration, load balancing, regression testing)
 - **Sprint 6:** Spec Templating (phase type templates for 6 common patterns)
+- **Sprint 7:** Verification Intelligence (contextual errors, failure summaries, verification-report.json)
 
-Total: 23 enhancements across 6 sprints. The orchestrator is now production-ready for parallel multi-worker execution with templated spec generation.
+Total: 24 enhancements across 7 sprints. The orchestrator is now production-ready for parallel multi-worker execution with templated spec generation and actionable verification output.
 
 ---
 
