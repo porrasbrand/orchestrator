@@ -123,7 +123,19 @@ Improve verify.sh output quality so failures are actionable without manual inter
 
 ---
 
-## All Sprints Complete (7/7)
+### Sprint 8: Integration Testing
+
+End-to-end testing of script chains to catch handoff bugs between interconnected scripts.
+
+| # | Enhancement | What | Why | Effort |
+|---|-------------|------|-----|--------|
+| 8.1 | **Integration Test Suite** ✅ | `scripts/integration-test.sh` tests the verify → notify → rollback chain end-to-end using mock SSH (PATH override). 4 scenarios: verify pass, verify fail, regression rollback, no-merge no-op. | Scripts were tested individually but never as a chain. Handoff bugs between verify/notify/rollback could go undetected until a real failure. | 3 hr | **DONE** |
+
+**Acceptance criteria:** All 4 scenarios pass with mock SSH, no network dependency, cleanup after test.
+
+---
+
+## All Sprints Complete (8/8)
 
 **Updated 2026-04-08.** The orchestrator enhancement roadmap is now fully implemented:
 
@@ -134,8 +146,9 @@ Improve verify.sh output quality so failures are actionable without manual inter
 - **Sprint 5:** Parallel Execution (parallel dispatch, merge orchestration, load balancing, regression testing)
 - **Sprint 6:** Spec Templating (phase type templates for 6 common patterns)
 - **Sprint 7:** Verification Intelligence (contextual errors, failure summaries, verification-report.json, notification hooks)
+- **Sprint 8:** Integration Testing (end-to-end chain tests with mock SSH)
 
-Total: 25 enhancements across 7 sprints. The orchestrator is now production-ready for parallel multi-worker execution with templated spec generation and actionable verification output.
+Total: 26 enhancements across 8 sprints. The orchestrator is now production-ready for parallel multi-worker execution with templated spec generation, actionable verification output, and end-to-end integration test coverage.
 
 ---
 
