@@ -220,3 +220,66 @@ Key Gemini insights not in our original analysis:
 ---
 
 *Next action: Execute Sprint 1 (reliability fixes) directly, then orchestrate Sprint 2+ through the framework.*
+
+---
+
+# P2 — AI-Driven Failure Recovery (Shipped 2026-05-19)
+
+## What it does
+
+Every verification failure now auto-triggers a Gemini 3.1 Pro Preview diagnostic before the orchestrator (or human) writes a revision spec. The model reads the structured `verification-report.json`, the original `spec.md`, accumulated revisions, learnings, recent events, and the relevant git diff — then produces a JSON object with: root cause, surgical (line-positioned) suggested revisions, confidence rating, and an `escalate_now` flag for fundamentally broken specs.
+
+When primary model confidence is low, the system auto-consults OpenAI gpt-5.2-pro as second opinion. When both are low, escalation is forced. When `escalate_now: true` fires with high confidence, the orchestrator halts the auto-revision cycle and routes through `notify.sh` — user must intervene rather than burning the 3-revision budget.
+
+## Phases shipped
+
+| Phase | Commits | Purpose |
+|---|---|---|
+| A.0 | ai-consult `fc401cc`, `33c1d47` | Add `gemini-3.1-pro-preview` + `-customtools` variant as default in ai-consult, pricing entries ($2/$12 ≤200K, $4/$18 >200K) |
+| A | ai-consult `788af7b`, orchestrator `d34f370`, `fb118c5` | `scripts/ai-diagnose.{sh,js}`, `templates/ai-diagnosis-schema.json`, synthetic fixture, new `diagnosis` reviewType in ai-consult |
+| B | orchestrator `715e72a` | Wire into `verify.sh` (non-blocking, behind `[ -x ]` guard), `templates/revision.md` placeholder, CLAUDE.md autonomy rule, `AI_DIAGNOSE_MOCK` env var |
+| C | orchestrator `501dfa3` | `scripts/ai-stats.sh` (text+json), status page card, `ai_diagnostic_used` event |
+| D | orchestrator `66cff71` | Escalation routing via `notify.sh`, OpenAI gpt-5.2-pro second-opinion on low-confidence, `--variant=customtools` A/B flag, 3 new integration scenarios |
+| E | ai-consult `b818724`, orchestrator `bfefa9e`, `41ed397` | Hotfix: Gemini native `responseSchema` API for guaranteed JSON conformance (replaces prompt-only enforcement) |
+
+**Integration tests:** 9 hermetic scenarios, 40 assertions, `$0` to run (uses `AI_DIAGNOSE_MOCK`).
+
+**Cost baseline:**
+- Standard diagnosis: ~$0.005–0.030 (input-size dependent)
+- Second-opinion fallback: ~$0.025–0.040 extra (gpt-5.2-pro)
+- b3x validation (12.8K input tokens): $0.030
+
+## Real-world validation methodology
+
+We synthesized a realistic failure scenario from `b3x-account-expert/.planning/phases/06.5-quality-eval/spec.md` (38KB complex spec) — fabricated a `verification-report.json` mimicking what `verify.sh` would produce for a DEV worker who (a) used the wrong column name (`topic_id` instead of `topic_cluster_id`) and (b) modified out-of-scope files (`scripts/eval-harness.js`).
+
+The model's response:
+1. Caught both planted failures
+2. Produced architectural insight we didn't anticipate: "spec lacks a designated generation script in 'Files to Create', forcing the worker to improvise by modifying existing out-of-scope scripts"
+3. Generated 3 surgical, line-positioned revisions — including adding a new script entry to the directory layout, adding it to "Files to Create", and strengthening the "Do NOT Touch" callout
+
+This is the gold standard: not just "find the bug" but "fix the spec design flaw that caused the bug."
+
+## Key engineering decisions (worth remembering)
+
+1. **API native structured output > prompt-only JSON enforcement.** First implementation used "STRICT JSON output (no prose, no markdown fence)" in the system prompt. Looked clean on the simple fixture; failed at JSON position 587 on real complex output (model used `\`` to escape backticks in markdown code samples — invalid JSON). Phase E switched to Gemini's `responseSchema` + OpenAI's `json_schema strict` mode. **Zero cost, imperceptible latency, guaranteed conformance.**
+
+2. **Schema compatibility transform.** Canonical schema stays draft-07 (for ajv defense-in-depth). At call time, `toGeminiSchema()` walker strips Gemini-incompatible keywords (`additionalProperties`, `$schema`, `$id` — OpenAPI 3.0 subset). OpenAI retains them under strict mode. Per-provider transform, not separate schema files.
+
+3. **Supplementary-not-blocking integration.** `verify.sh` calls `ai-diagnose.sh` but ignores its exit code for the verdict — diagnostic failure never breaks verification. If `ai-diagnose.sh` doesn't exist (bare install), `verify.sh` skips it silently via `[ -x ]` guard.
+
+4. **`AI_DIAGNOSE_MOCK` env var.** Single-path: takes canned response JSON. Dual-path: takes `{primary, secondary}` object for second-opinion testing. Used by all integration test scenarios — deterministic, network-free, $0.
+
+5. **`{{ai_diagnostic_block}}` is PM-driven** (Claude fills it from `ai-diagnosis-NN.json`), not automated. Phase B chose this deliberately — adds zero new code, lets the PM exercise judgment. Future Phase could mechanize via `render-revision.sh` if cadence becomes a bottleneck.
+
+6. **The `--variant=customtools` flag** flows through via `AI_DIAGNOSE_MODEL` env var. Same input → different model. Recorded in `ai-diagnosis-NN.json`'s `model` field for audit. Foundation for future quality benchmarking; no comparison logic ships in P2.
+
+## What's next on the roadmap
+
+Master roadmap from the strategic review still stands. In recommended order:
+
+- **P1** — Live observability + mid-flight interrupt (SSE/WebSocket status page; `interrupt.json` flag checked at phase boundaries)
+- **P3** — Portfolio orchestration (lift `.planning/` to portfolio root; round-robin dispatch across workers; cross-project regression registry; 2-3× throughput)
+- **P4** — Brief auto-generation (one-line goal → clarifying Q&A → `brief.md`; unlocks the autonomous front-end)
+- **P5** — Deploy + monitor modules (new `deploy` phase type; `monitor-prod.js` service; closes the build→ship→learn→fix loop)
+- **P6** — Self-improvement loop (mine `learnings.jsonl` + `events.jsonl` across N projects; auto-update `spec.md` template and `check-spec.sh` rules; orchestrator orchestrates its own improvements)
