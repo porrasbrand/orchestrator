@@ -11,7 +11,7 @@
 | Repo | Hash | Prefix + title |
 |------|------|----------------|
 | ai-consult | `788af7b` | `[ai-consult-p2-A] Add diagnosis reviewType for orchestrator failure recovery` |
-| orchestrator | (this commit) | `[orchestrator-p2-A] Add ai-diagnose.sh + schema + fixture` |
+| orchestrator | `d34f370` | `[orchestrator-p2-A] Add ai-diagnose.sh + schema + fixture` |
 
 ## Files changed
 
