@@ -812,6 +812,68 @@ MOCKEOF
 run_scenario_5
 PATH="$ORIGINAL_PATH"
 
+# ============================================================
+# Scenario 6: ai-stats reports expected counts
+# ============================================================
+# Builds on scenario 5: after ai-diagnose produced an ai-diagnosis-NN.json
+# (and via verify.sh would have appended ai_diagnostic_run), this scenario
+# manually appends the corresponding ai_diagnostic_used event (the same
+# event the PM emits per the CLAUDE.md autonomy rule) and asserts that
+# scripts/ai-stats.sh aggregates the stream correctly.
+run_scenario_6() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 6: ai-stats reports expected counts"
+    echo "=========================================="
+
+    # Use a hermetic project dir so we can assert clean counts (the main
+    # project's events.jsonl already has events from prior scenarios).
+    local AI_STATS_DIR="$TEST_DIR/ai-stats-project"
+    rm -rf "$AI_STATS_DIR"
+    mkdir -p "$AI_STATS_DIR/.planning"
+    cat > "$AI_STATS_DIR/.planning/events.jsonl" << 'AIEOF'
+{"ts":"2026-05-19T11:30:00Z","event":"ai_diagnostic_run","data":{"phase":"02-ai-diagnose","diagnosis_num":1,"confidence":"high","escalate_now":false,"cost":0.005}}
+{"ts":"2026-05-19T11:31:00Z","event":"ai_diagnostic_used","data":{"phase":"02-ai-diagnose","diagnosis_num":1,"revisions_applied":1,"confidence":"high"}}
+AIEOF
+
+    local AI_STATS_JSON
+    AI_STATS_JSON=$(bash "$SCRIPTS_DIR/ai-stats.sh" --project "$AI_STATS_DIR" --format json 2>/dev/null || echo '{}')
+
+    # Counts assertion: 1 run, 1 used, 100% adoption.
+    local RUN_N USED_N ADOPT
+    RUN_N=$(echo "$AI_STATS_JSON" | jq -r '.diagnostics_run')
+    USED_N=$(echo "$AI_STATS_JSON" | jq -r '.diagnostics_used')
+    ADOPT=$(echo "$AI_STATS_JSON" | jq -r '.adoption_rate')
+    if [[ "$RUN_N" == "1" ]]; then log_pass; echo "PASS: diagnostics_run == 1"; else log_fail "diagnostics_run != 1 (got $RUN_N)"; fi
+    if [[ "$USED_N" == "1" ]]; then log_pass; echo "PASS: diagnostics_used == 1"; else log_fail "diagnostics_used != 1 (got $USED_N)"; fi
+    if [[ "$ADOPT" == "100" ]]; then log_pass; echo "PASS: adoption_rate == 100%"; else log_fail "adoption_rate != 100 (got $ADOPT)"; fi
+
+    # Text format also surfaces the counts.
+    local AI_STATS_TEXT
+    AI_STATS_TEXT=$(bash "$SCRIPTS_DIR/ai-stats.sh" --project "$AI_STATS_DIR" 2>/dev/null)
+    if echo "$AI_STATS_TEXT" | grep -q "Diagnostics run:.*1"; then
+        log_pass; echo "PASS: text format renders count"
+    else
+        log_fail "text format missing diagnostics_run line"
+    fi
+
+    echo "ai-stats scenario completed"
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+    fi
+    echo "Scenario 6: $sc_pass passed, $sc_fail failed"
+}
+
+run_scenario_6
+PATH="$ORIGINAL_PATH"
+
 echo ""
 TOTAL=$((PASS_COUNT + FAIL_COUNT))
 SCENARIOS_PASSED=0
@@ -823,7 +885,7 @@ done
 
 # Count scenarios passed by checking the result string
 SC_PASSED=0
-SC_TOTAL=5
+SC_TOTAL=6
 # Check each char pair in SCENARIO_RESULTS
 idx=0
 while [[ $idx -lt ${#SCENARIO_RESULTS} ]]; do

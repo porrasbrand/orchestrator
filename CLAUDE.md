@@ -170,6 +170,14 @@ If `scripts/ai-diagnose.sh` is missing/non-executable (bare install), verify.sh 
 
 **When verify.sh exits 1 AND `ai-diagnosis-NN.json` exists, READ IT before writing the revision spec.** Incorporate the `suggested_revisions` as concrete edits in revision.md (do not paraphrase — apply them literally where they match). The `{{ai_diagnostic_block}}` placeholder in `templates/revision.md` documents the substitution shape.
 
+**MANDATORY: emit the `ai_diagnostic_used` event AFTER writing a revision spec that incorporated suggestions from an `ai-diagnosis-NN.json` file.** This closes the observability loop — `scripts/ai-stats.sh` correlates this event with downstream `phase_complete` vs. `phase_verification_failed` outcomes to measure AI-assisted revision success. Append to the project's `.planning/events.jsonl`:
+
+```bash
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","event":"ai_diagnostic_used","data":{"phase":"<phase-name>","diagnosis_num":<NN>,"revisions_applied":<count>,"confidence":"<high|medium|low>"}}' >> .planning/events.jsonl
+```
+
+`revisions_applied` is the count of `suggested_revisions[]` entries from the diagnostic JSON that you actually incorporated into the revision spec (typically all of them when confidence is high; may be 0 when you only used the diagnostic as context without applying its specific edits).
+
 ### Step 5: Verdict
 - All pass → COMPLETE
 - Any fail → REVISION (include exact failure output + AI diagnostic in revision spec)
@@ -299,7 +307,7 @@ Event types:
 - `checkpoint` — user checkpoint reached
 - `learning_added` — new entry in learnings.md
 - `ai_diagnostic_run` — `scripts/ai-diagnose.sh` produced an `ai-diagnosis-NN.json` (data: phase, diagnosis_num, confidence, escalate_now, cost). Emitted by `ai-diagnose.js` on every successful run.
-- `ai_diagnostic_used` — PM applied suggested_revisions from a diagnostic into a revision spec (data: phase, diagnosis_num, revisions_applied_count). Emitted manually by the PM during revision authoring; Phase C will add tooling. Documented here for forward compatibility.
+- `ai_diagnostic_used` — PM applied suggested_revisions from a diagnostic into a revision spec (data: phase, diagnosis_num, revisions_applied, confidence). Emitted manually by the PM during revision authoring (see the autonomy-rule subsection above for the canonical bash one-liner). `scripts/ai-stats.sh` correlates these events with downstream phase outcomes to measure AI-assisted revision success.
 - `project_complete` — all phases done
 
 ---

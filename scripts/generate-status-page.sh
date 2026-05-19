@@ -26,6 +26,23 @@ TOTAL_SMOKE_TESTS=$(jq -r '.metrics.total_smoke_tests // 0' "$STATUS_FILE")
 STARTED_AT=$(jq -r '.metrics.started_at // ""' "$STATUS_FILE")
 UPDATED_AT=$(jq -r '.updated // ""' "$STATUS_FILE")
 
+# ---- P2 Phase C: AI diagnostic stats (best-effort, never block page gen) ----
+AI_STATS_BIN="$(cd "$(dirname "$0")" && pwd)/ai-stats.sh"
+AI_DIAG_RUN=0; AI_DIAG_USED=0; AI_ADOPTION=0; AI_COST=0; AI_SUCCESS_RATE="n/a"; AI_ESCALATION=0
+if [ -x "$AI_STATS_BIN" ]; then
+  AI_STATS_JSON=$(bash "$AI_STATS_BIN" --project "$PROJECT_PATH" --format json 2>/dev/null || echo '{}')
+  AI_DIAG_RUN=$(echo "$AI_STATS_JSON" | jq -r '.diagnostics_run // 0' 2>/dev/null || echo 0)
+  AI_DIAG_USED=$(echo "$AI_STATS_JSON" | jq -r '.diagnostics_used // 0' 2>/dev/null || echo 0)
+  AI_ADOPTION=$(echo "$AI_STATS_JSON" | jq -r '.adoption_rate // 0' 2>/dev/null || echo 0)
+  AI_COST=$(echo "$AI_STATS_JSON" | jq -r '.cost.total // 0' 2>/dev/null || echo 0)
+  AI_SUCCESS_RAW=$(echo "$AI_STATS_JSON" | jq -r '.ai_assisted_success_rate' 2>/dev/null || echo null)
+  if [ -n "$AI_SUCCESS_RAW" ] && [ "$AI_SUCCESS_RAW" != "null" ]; then
+    AI_SUCCESS_RATE="${AI_SUCCESS_RAW}%"
+  fi
+  AI_ESCALATION=$(echo "$AI_STATS_JSON" | jq -r '.escalation_rate // 0' 2>/dev/null || echo 0)
+fi
+AI_COST_FMT=$(printf "\$%.4f" "$AI_COST")
+
 # Calculate progress percentage
 if [ "$PHASES_TOTAL" -gt 0 ]; then
   PROGRESS_PCT=$((PHASES_COMPLETE * 100 / PHASES_TOTAL))
@@ -355,6 +372,22 @@ $(generate_event_timeline)
         <div class="stat-value">$AVG_TIME_STR</div>
         <div class="stat-label">Avg/Phase</div>
       </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>AI Diagnostic Stats</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Diagnostics run</td><td>$AI_DIAG_RUN</td></tr>
+          <tr><td>Adoption rate</td><td>${AI_ADOPTION}%</td></tr>
+          <tr><td>Total cost</td><td>$AI_COST_FMT</td></tr>
+          <tr><td>AI-assisted success rate</td><td>$AI_SUCCESS_RATE</td></tr>
+          <tr><td>Escalation rate</td><td>${AI_ESCALATION}%</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
