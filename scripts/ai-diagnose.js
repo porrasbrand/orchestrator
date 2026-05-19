@@ -12,6 +12,13 @@
 //   0 ok
 //   1 missing required file OR ai-consult call failed
 //   2 schema validation failed (raw response preserved at ai-diagnosis-NN.raw.txt)
+//
+// Env vars:
+//   AI_CONSULT_PATH   default: ~/awsc-new/awesome/ai-consult
+//   AI_DIAGNOSE_MOCK  path to a JSON file with shape {feedback, usage, cost}.
+//                     When set, bypasses the ai-consult call and returns the
+//                     canned response. Used by integration-test.sh for
+//                     deterministic + cost-free CI runs.
 
 const fs = require('fs');
 const path = require('path');
@@ -193,17 +200,29 @@ async function main() {
   const context = buildContext({ phaseDir, projectRoot, phaseName });
   process.stderr.write(`[ai-diagnose] context bundled: ${context.length} chars\n`);
 
-  // Invoke ai-consult.
+  // Invoke ai-consult — OR use the AI_DIAGNOSE_MOCK env var to short-circuit
+  // with a canned response. The mock path lets integration tests run
+  // deterministically + cost-free. Mock file must be a JSON document with
+  // shape: { feedback: "<JSON string>", usage: {...}, cost: {...} }.
   let r;
-  try {
-    const ai = require(path.join(AI_CONSULT_PATH, 'index.js'));
-    r = await ai.reviewDocument({
-      provider: 'gemini',
-      content: context,
-      reviewType: 'diagnosis',
-    });
-  } catch (e) {
-    fail(`ai-consult call failed: ${e.message}`, 1);
+  if (process.env.AI_DIAGNOSE_MOCK) {
+    try {
+      r = JSON.parse(fs.readFileSync(process.env.AI_DIAGNOSE_MOCK, 'utf8'));
+      process.stderr.write(`[ai-diagnose] using AI_DIAGNOSE_MOCK=${process.env.AI_DIAGNOSE_MOCK}\n`);
+    } catch (e) {
+      fail(`AI_DIAGNOSE_MOCK read failed: ${e.message}`, 1);
+    }
+  } else {
+    try {
+      const ai = require(path.join(AI_CONSULT_PATH, 'index.js'));
+      r = await ai.reviewDocument({
+        provider: 'gemini',
+        content: context,
+        reviewType: 'diagnosis',
+      });
+    } catch (e) {
+      fail(`ai-consult call failed: ${e.message}`, 1);
+    }
   }
   if (!r || typeof r.feedback !== 'string') fail('ai-consult returned no feedback', 1);
 

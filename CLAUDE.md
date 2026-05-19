@@ -157,9 +157,22 @@ ssh <worker> "curl -s http://localhost:<port>/api/history"
 
 If any previous phase's smoke tests fail → this phase introduced a regression.
 
-### Step 4: Verdict
+### Step 4: AI Diagnostic (auto-runs on failure)
+
+When `verify.sh` exits 1 (any smoke test fails) it now auto-invokes `scripts/ai-diagnose.sh` against the failed phase-dir. The diagnostic primitive bundles `verification-report.json` + `spec.md` + prior revisions + recent events + scoped git diff, hands them to Gemini 3.1 Pro Preview, and writes a structured `phase-dir/ai-diagnosis-NN.json` (auto-numbered N=count+1).
+
+The diagnostic is **supplementary, never blocking** — verify.sh still exits 1 regardless of the diagnostic's outcome. Diagnostic exit codes:
+- `0` — diagnostic written successfully; path printed
+- `1` — transient API failure; warning printed, proceed without diagnostic
+- `2` — schema validation failed; raw output preserved at `phase-dir/ai-diagnosis-NN.raw.txt`, proceed
+
+If `scripts/ai-diagnose.sh` is missing/non-executable (bare install), verify.sh skips this step silently.
+
+**When verify.sh exits 1 AND `ai-diagnosis-NN.json` exists, READ IT before writing the revision spec.** Incorporate the `suggested_revisions` as concrete edits in revision.md (do not paraphrase — apply them literally where they match). The `{{ai_diagnostic_block}}` placeholder in `templates/revision.md` documents the substitution shape.
+
+### Step 5: Verdict
 - All pass → COMPLETE
-- Any fail → REVISION (include exact failure output in revision spec)
+- Any fail → REVISION (include exact failure output + AI diagnostic in revision spec)
 - Max revisions exceeded → REVISION_FAILED → escalate
 
 ---
@@ -285,6 +298,8 @@ Event types:
 - `phase_escalated` — max revisions exceeded
 - `checkpoint` — user checkpoint reached
 - `learning_added` — new entry in learnings.md
+- `ai_diagnostic_run` — `scripts/ai-diagnose.sh` produced an `ai-diagnosis-NN.json` (data: phase, diagnosis_num, confidence, escalate_now, cost). Emitted by `ai-diagnose.js` on every successful run.
+- `ai_diagnostic_used` — PM applied suggested_revisions from a diagnostic into a revision spec (data: phase, diagnosis_num, revisions_applied_count). Emitted manually by the PM during revision authoring; Phase C will add tooling. Documented here for forward compatibility.
 - `project_complete` — all phases done
 
 ---
@@ -321,6 +336,7 @@ After every state change:
 - Update learnings
 - Advance to next phase
 - Make architecture decisions within brief constraints
+- Read `ai-diagnosis-NN.json` (when present after verify failure) and apply `suggested_revisions` directly to the revision spec when `confidence` is `high`. Pause for user when `confidence` is `low` OR `escalate_now=true`. (Phase D wires the escalation event into notify.sh automatically; this rule captures the human-facing behavior.)
 
 ### DO NOT without user:
 - Delete production data or force-push

@@ -409,5 +409,38 @@ else
   echo ""
   echo "❌ Phase $PHASE_NAME FAILED verification"
   echo "{\"ts\":\"$NOW\",\"event\":\"phase_verification_failed\",\"data\":{\"phase\":\"$PHASE_NAME\",\"pass\":$PASS,\"fail\":$FAIL,\"total\":$TOTAL}}" >> "$EVENTS_FILE"
+
+  # ---- P2 Phase B: AI Diagnostic step ----
+  # Supplementary (NEVER blocking). When ai-diagnose.sh is present + executable,
+  # invoke it on this failed phase-dir so the orchestrator (or PM) can read the
+  # diagnostic before composing the revision spec. Three outcome bands:
+  #   exit 0 → diagnostic written; surface path
+  #   exit 1 → transient (likely API failure); print warning, proceed
+  #   exit 2 → schema fail; warning, raw output preserved, proceed
+  # If ai-diagnose.sh is absent/non-executable, skip silently (bare orchestrator
+  # installs without ai-consult should still verify normally).
+  AI_DIAGNOSE_BIN="$SCRIPT_DIR/ai-diagnose.sh"
+  if [ -x "$AI_DIAGNOSE_BIN" ]; then
+    echo ""
+    echo "--- AI Diagnostic ---"
+    AI_DIAG_RC=0
+    bash "$AI_DIAGNOSE_BIN" "$PROJECT_PATH/$PHASE_DIR" || AI_DIAG_RC=$?
+    case "$AI_DIAG_RC" in
+      0)
+        LATEST_DIAG=$(ls -1 "$PROJECT_PATH/$PHASE_DIR"/ai-diagnosis-*.json 2>/dev/null | tail -1)
+        echo "🤖 AI Diagnostic complete: ${LATEST_DIAG:-(no file written)}"
+        ;;
+      1)
+        echo "⚠️  AI Diagnostic transient failure (exit 1) — proceeding without diagnostic"
+        ;;
+      2)
+        echo "⚠️  AI Diagnostic schema-validation failed (exit 2) — raw output preserved in phase-dir; proceeding"
+        ;;
+      *)
+        echo "⚠️  AI Diagnostic unknown exit code ($AI_DIAG_RC) — proceeding"
+        ;;
+    esac
+  fi
+
   exit 1
 fi

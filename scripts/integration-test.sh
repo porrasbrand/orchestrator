@@ -734,6 +734,84 @@ PATH="$ORIGINAL_PATH"
 run_scenario_4
 PATH="$ORIGINAL_PATH"
 
+# ============================================================
+# Scenario 5: verify → ai-diagnose chain with mocked Gemini
+# ============================================================
+# Exercises the P2 Phase B integration: a failing phase causes verify.sh to
+# invoke ai-diagnose.sh, which (with AI_DIAGNOSE_MOCK set) returns a canned
+# JSON response. Asserts:
+#   - ai-diagnose.sh exits 0 with the mock
+#   - ai-diagnosis-NN.json is produced in the phase-dir
+#   - the produced JSON contains the diagnosis/root_cause/confidence keys
+# No network access. Cost: $0.
+run_scenario_5() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 5: verify → ai-diagnose chain with mocked Gemini"
+    echo "=========================================="
+
+    local PHASE_DIR="$TEST_DIR/project/.planning/phases/02-ai-diagnose"
+    mkdir -p "$PHASE_DIR"
+
+    # Stage the test-fixture spec + verification report into the phase-dir.
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$PHASE_DIR/spec.md"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$PHASE_DIR/verification-report.json"
+
+    # Write a deterministic mock response that satisfies the diagnosis schema.
+    local MOCK_FILE="$TEST_DIR/ai-diagnose-mock.json"
+    cat > "$MOCK_FILE" << 'MOCKEOF'
+{
+  "feedback": "{\"diagnosis\":\"Mocked diagnosis for integration test — server missing app.listen call.\",\"root_cause\":\"missing_port_binding\",\"suggested_revisions\":[{\"section\":\"## Implementation Steps\",\"change\":\"Add app.listen(4080) at end of src/server.js.\"}],\"confidence\":\"high\",\"escalate_now\":false,\"escalation_reason\":\"\"}",
+  "usage": { "inputTokens": 1500, "outputTokens": 200, "totalTokens": 1700 },
+  "cost": { "inputTokens": 1500, "outputTokens": 200, "totalCost": 0.005, "currency": "USD" }
+}
+MOCKEOF
+
+    # Invoke ai-diagnose.sh directly with the mock (verify.sh's call would do
+    # exactly this; we test the primitive in isolation so a missing SSH/PATH
+    # doesn't muddy the assertion).
+    local AI_DIAG_RC=0
+    AI_DIAGNOSE_MOCK="$MOCK_FILE" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$PHASE_DIR" > "$TEST_DIR/ai-diag.out" 2>&1 || AI_DIAG_RC=$?
+    assert_exit_code "$AI_DIAG_RC" 0 "ai-diagnose.sh exit code (0 = ok with mock)"
+
+    # The diagnosis JSON should be written into the phase-dir.
+    local DIAG_FILE="$PHASE_DIR/ai-diagnosis-01.json"
+    if [[ -f "$DIAG_FILE" ]]; then
+        log_pass
+        echo "PASS: ai-diagnosis-01.json produced"
+    else
+        log_fail "ai-diagnosis-01.json NOT produced (path: $DIAG_FILE)"
+    fi
+
+    # The produced file should contain all required schema keys.
+    if [[ -f "$DIAG_FILE" ]] && grep -q '"diagnosis"' "$DIAG_FILE" \
+       && grep -q '"root_cause"' "$DIAG_FILE" \
+       && grep -q '"confidence"' "$DIAG_FILE" \
+       && grep -q '"escalate_now"' "$DIAG_FILE"; then
+        log_pass
+        echo "PASS: diagnosis JSON has required keys"
+    else
+        log_fail "diagnosis JSON missing required keys"
+    fi
+
+    # Echo a marker line so the smoke-test grep can detect this scenario ran.
+    echo "verify → ai-diagnose chain scenario completed"
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+    fi
+    echo "Scenario 5: $sc_pass passed, $sc_fail failed"
+}
+
+run_scenario_5
+PATH="$ORIGINAL_PATH"
+
 echo ""
 TOTAL=$((PASS_COUNT + FAIL_COUNT))
 SCENARIOS_PASSED=0
@@ -745,7 +823,7 @@ done
 
 # Count scenarios passed by checking the result string
 SC_PASSED=0
-SC_TOTAL=4
+SC_TOTAL=5
 # Check each char pair in SCENARIO_RESULTS
 idx=0
 while [[ $idx -lt ${#SCENARIO_RESULTS} ]]; do
