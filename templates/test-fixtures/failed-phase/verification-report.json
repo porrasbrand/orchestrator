@@ -1,0 +1,31 @@
+{
+  "phase": "test-failed",
+  "worker": "hetzner",
+  "started_at": "2026-05-19T10:38:00Z",
+  "finished_at": "2026-05-19T10:38:14Z",
+  "exit_code": 1,
+  "summary": "1 of 2 smoke tests failed",
+  "failures": [
+    {
+      "type": "smoke_test",
+      "test": "curl -s -o /dev/null -w \"%{http_code}\\n\" http://localhost:4080/api/users",
+      "expected": "200",
+      "actual": "curl: (7) Failed to connect to localhost port 4080 after 0 ms: Couldn't connect to server",
+      "suggestion": "Server may not be listening — check that src/server.js calls app.listen(4080, ...) and that the process is alive (ps -ef | grep server.js)"
+    },
+    {
+      "type": "smoke_test",
+      "test": "curl -s http://localhost:4080/api/users | jq '.users | length'",
+      "expected": ">= 1",
+      "actual": "curl: (7) Failed to connect to localhost port 4080 after 0 ms",
+      "suggestion": "Same root cause as failure #1 — once the server is listening, this should pass."
+    }
+  ],
+  "passed": [],
+  "log_excerpt": [
+    "[server] startup",
+    "[users] router mounted at /api/users",
+    "[server] seed loaded (3 users)",
+    "(no app.listen output before process exited)"
+  ]
+}
