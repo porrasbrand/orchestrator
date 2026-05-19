@@ -129,8 +129,18 @@ STATS_JSON=$(printf '%s\n' "$RAW" | awk 'NF > 0' \
     {
       diagnostics_run: ([.[] | select(.event == "ai_diagnostic_run")] | length),
       diagnostics_used: ([.[] | select(.event == "ai_diagnostic_used")] | length),
+      second_opinions_consulted: ([.[] | select(.event == "ai_second_opinion_consulted")] | length),
+      both_low_escalations: ([.[] | select(.event == "ai_second_opinion_consulted") | select(.data.both_low == true)] | length),
       cost: {
-        total: ([.[] | select(.event == "ai_diagnostic_run") | .data.cost // 0] | add // 0),
+        # Total = primary costs (ai_diagnostic_run.data.cost) + secondary-only
+        # costs (ai_second_opinion_consulted.data.cost — by convention the
+        # second_opinion event carries the SECONDARY cost only, set in
+        # scripts/ai-diagnose.js so summation here is trivial).
+        total: (
+          ([.[] | select(.event == "ai_diagnostic_run") | .data.cost // 0] | add // 0)
+          +
+          ([.[] | select(.event == "ai_second_opinion_consulted") | .data.cost // 0] | add // 0)
+        ),
         avg:   (if ([.[] | select(.event == "ai_diagnostic_run")] | length) == 0 then 0
                 else (([.[] | select(.event == "ai_diagnostic_run") | .data.cost // 0] | add // 0)
                       / ([.[] | select(.event == "ai_diagnostic_run")] | length)) end),
@@ -156,6 +166,8 @@ STATS_JSON=$(printf '%s\n' "$RAW" | awk 'NF > 0' \
                         else (.diagnostics_used / .diagnostics_run | round_pct) end)
     | .escalation_rate = (if .diagnostics_run == 0 then 0
                           else (.escalations / .diagnostics_run | round_pct) end)
+    | .second_opinion_rate = (if .diagnostics_run == 0 then 0
+                              else (.second_opinions_consulted / .diagnostics_run | round_pct) end)
     | .ai_assisted_success_rate = (if ._resolved_used == 0 then null
                                    else (._resolved_success / ._resolved_used | round_pct) end)
     | .missing_cost = ([.[]] | length) * 0    # placeholder; computed below from raw
@@ -199,6 +211,9 @@ else
   echo "AI-assisted revision success rate: ${SUCCESS_RATE}%"
 fi
 echo "Escalation rate:   $(echo "$FINAL_JSON" | jq -r '.escalation_rate')%"
+echo "Second-opinion rate: $(echo "$FINAL_JSON" | jq -r '.second_opinion_rate')% (low-confidence primaries → OpenAI fallback)"
+echo "Both-providers-low escalations: $(echo "$FINAL_JSON" | jq -r '.both_low_escalations')"
+echo "Second opinions consulted: $(echo "$FINAL_JSON" | jq -r '.second_opinions_consulted')"
 echo ""
 echo "-- Cost --"
 printf "Total:  \$%.4f\n" "$(echo "$FINAL_JSON" | jq -r '.cost.total')"

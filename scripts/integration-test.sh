@@ -874,6 +874,171 @@ AIEOF
 run_scenario_6
 PATH="$ORIGINAL_PATH"
 
+# ============================================================
+# Scenario 7: Escalation routing (P2-D)
+# ============================================================
+# Mocked Gemini returns escalate_now=true + confidence=high. ai-diagnose.sh
+# must (a) emit ai_escalation_recommended event, (b) invoke notify.sh which
+# writes to .planning/notifications.md + latest-notification.json.
+run_scenario_7() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 7: AI escalation routing (P2-D)"
+    echo "=========================================="
+
+    local DIR="$TEST_DIR/escalate-phase"
+    rm -rf "$DIR"
+    mkdir -p "$DIR/.planning"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$DIR/spec.md"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$DIR/verification-report.json"
+    echo "" > "$DIR/.planning/events.jsonl"
+
+    local MOCK="$TEST_DIR/mock-escalate.json"
+    cat > "$MOCK" << 'MOCKEOF'
+{
+  "feedback": "{\"diagnosis\":\"spec uses missing tool\",\"root_cause\":\"wrong assumption\",\"suggested_revisions\":[],\"confidence\":\"high\",\"escalate_now\":true,\"escalation_reason\":\"spec assumes nonexistent API\"}",
+  "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+  "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.001, "currency": "USD" }
+}
+MOCKEOF
+
+    local RC=0
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$DIR" > "$TEST_DIR/escalate.out" 2>&1 || RC=$?
+    assert_exit_code "$RC" 0 "ai-diagnose.sh exit code (0 even on escalation — supplementary)"
+
+    if grep -q "ESCALATION RECOMMENDED" "$TEST_DIR/escalate.out"; then log_pass; echo "PASS: stdout contains ESCALATION RECOMMENDED";
+    else log_fail "stdout missing ESCALATION RECOMMENDED"; fi
+
+    if grep -q "ai_escalation_recommended" "$DIR/.planning/events.jsonl"; then log_pass; echo "PASS: ai_escalation_recommended event logged";
+    else log_fail "event missing from events.jsonl"; fi
+
+    if [[ -f "$DIR/.planning/notifications.md" ]] && grep -q "AI escalation recommended" "$DIR/.planning/notifications.md"; then
+        log_pass; echo "PASS: notify.sh wrote escalation to notifications.md"
+    else log_fail "notifications.md missing escalation entry"; fi
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"; else SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"; fi
+    echo "Scenario 7: $sc_pass passed, $sc_fail failed"
+}
+
+# ============================================================
+# Scenario 8: Second-opinion fallback (P2-D)
+# ============================================================
+# Primary returns low-confidence; secondary returns high-confidence.
+# ai-diagnose.js must swap: primary file uses secondary's content, rejected
+# primary saved as -secondary, primary tagged with second_opinion_used + the
+# original provider/confidence.
+run_scenario_8() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 8: Second-opinion fallback (P2-D)"
+    echo "=========================================="
+
+    local DIR="$TEST_DIR/second-opinion-phase"
+    rm -rf "$DIR"
+    mkdir -p "$DIR/.planning"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$DIR/spec.md"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$DIR/verification-report.json"
+    echo "" > "$DIR/.planning/events.jsonl"
+
+    local MOCK="$TEST_DIR/mock-second.json"
+    cat > "$MOCK" << 'MOCKEOF'
+{
+  "primary": {
+    "feedback": "{\"diagnosis\":\"unclear from logs\",\"root_cause\":\"insufficient_evidence\",\"suggested_revisions\":[],\"confidence\":\"low\",\"escalate_now\":false}",
+    "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+    "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.001, "currency": "USD" }
+  },
+  "secondary": {
+    "feedback": "{\"diagnosis\":\"missing app.listen\",\"root_cause\":\"port not bound\",\"suggested_revisions\":[{\"section\":\"impl\",\"change\":\"add listen\"}],\"confidence\":\"high\",\"escalate_now\":false}",
+    "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+    "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.002, "currency": "USD" }
+  }
+}
+MOCKEOF
+
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$DIR" > "$TEST_DIR/second.out" 2>&1
+    if grep -q "second opinion" "$TEST_DIR/second.out"; then log_pass; echo "PASS: second opinion was consulted";
+    else log_fail "stdout missing second-opinion log line"; fi
+
+    if [[ -f "$DIR/ai-diagnosis-01.json" ]]; then log_pass; echo "PASS: primary diagnosis written"; else log_fail "primary file missing"; fi
+    if [[ -f "$DIR/ai-diagnosis-01-secondary.json" ]]; then log_pass; echo "PASS: rejected primary saved as -secondary"; else log_fail "-secondary file missing"; fi
+
+    # Primary should now reflect the secondary's content (swap).
+    if [[ -f "$DIR/ai-diagnosis-01.json" ]]; then
+        local SWAPPED_PROVIDER=$(jq -r '.provider' "$DIR/ai-diagnosis-01.json")
+        local PRIMARY_PROVIDER_TAG=$(jq -r '.primary_provider' "$DIR/ai-diagnosis-01.json")
+        local SECOND_OPINION_USED=$(jq -r '.second_opinion_used' "$DIR/ai-diagnosis-01.json")
+        if [[ "$SWAPPED_PROVIDER" == "openai" ]]; then log_pass; echo "PASS: primary file's provider=openai (swap occurred)"; else log_fail "expected provider=openai after swap, got $SWAPPED_PROVIDER"; fi
+        if [[ "$PRIMARY_PROVIDER_TAG" == "gemini" ]]; then log_pass; echo "PASS: primary_provider tag=gemini (original provider recorded)"; else log_fail "primary_provider tag != gemini ($PRIMARY_PROVIDER_TAG)"; fi
+        if [[ "$SECOND_OPINION_USED" == "true" ]]; then log_pass; echo "PASS: second_opinion_used=true"; else log_fail "second_opinion_used != true"; fi
+    fi
+
+    if grep -q "ai_second_opinion_consulted" "$DIR/.planning/events.jsonl"; then log_pass; echo "PASS: ai_second_opinion_consulted event logged"; else log_fail "event missing"; fi
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"; else SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"; fi
+    echo "Scenario 8: $sc_pass passed, $sc_fail failed"
+}
+
+# ============================================================
+# Scenario 9: A/B variant model name flows through (P2-D)
+# ============================================================
+run_scenario_9() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 9: A/B variant — customtools model recorded (P2-D)"
+    echo "=========================================="
+
+    local DIR_A="$TEST_DIR/variant-base"
+    local DIR_B="$TEST_DIR/variant-customtools"
+    rm -rf "$DIR_A" "$DIR_B"
+    for D in "$DIR_A" "$DIR_B"; do
+        mkdir -p "$D/.planning"
+        cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$D/spec.md"
+        cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$D/verification-report.json"
+        echo "" > "$D/.planning/events.jsonl"
+    done
+
+    local MOCK="$TEST_DIR/mock-variant.json"
+    cat > "$MOCK" << 'MOCKEOF'
+{
+  "feedback": "{\"diagnosis\":\"x\",\"root_cause\":\"y\",\"suggested_revisions\":[],\"confidence\":\"medium\",\"escalate_now\":false}",
+  "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+  "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.001, "currency": "USD" }
+}
+MOCKEOF
+
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$DIR_A" > "$TEST_DIR/variant-base.out" 2>&1
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" --variant=customtools "$DIR_B" > "$TEST_DIR/variant-ct.out" 2>&1
+
+    local MODEL_A=$(jq -r '.model' "$DIR_A/ai-diagnosis-01.json" 2>/dev/null)
+    local MODEL_B=$(jq -r '.model' "$DIR_B/ai-diagnosis-01.json" 2>/dev/null)
+    if [[ "$MODEL_A" == "gemini-3.1-pro-preview" ]]; then log_pass; echo "PASS: base run records model=gemini-3.1-pro-preview"; else log_fail "base model: got $MODEL_A"; fi
+    if [[ "$MODEL_B" == "gemini-3.1-pro-preview-customtools" ]]; then log_pass; echo "PASS: --variant=customtools records model=gemini-3.1-pro-preview-customtools"; else log_fail "variant model: got $MODEL_B"; fi
+    if [[ "$MODEL_A" != "$MODEL_B" ]]; then log_pass; echo "PASS: model field differs between base and customtools"; else log_fail "model fields are identical — variant did not flow through"; fi
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"; else SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"; fi
+    echo "Scenario 9: $sc_pass passed, $sc_fail failed"
+}
+
+run_scenario_7
+PATH="$ORIGINAL_PATH"
+run_scenario_8
+PATH="$ORIGINAL_PATH"
+run_scenario_9
+PATH="$ORIGINAL_PATH"
+
 echo ""
 TOTAL=$((PASS_COUNT + FAIL_COUNT))
 SCENARIOS_PASSED=0
@@ -885,7 +1050,7 @@ done
 
 # Count scenarios passed by checking the result string
 SC_PASSED=0
-SC_TOTAL=6
+SC_TOTAL=9
 # Check each char pair in SCENARIO_RESULTS
 idx=0
 while [[ $idx -lt ${#SCENARIO_RESULTS} ]]; do

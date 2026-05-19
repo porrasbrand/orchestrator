@@ -308,6 +308,8 @@ Event types:
 - `learning_added` — new entry in learnings.md
 - `ai_diagnostic_run` — `scripts/ai-diagnose.sh` produced an `ai-diagnosis-NN.json` (data: phase, diagnosis_num, confidence, escalate_now, cost). Emitted by `ai-diagnose.js` on every successful run.
 - `ai_diagnostic_used` — PM applied suggested_revisions from a diagnostic into a revision spec (data: phase, diagnosis_num, revisions_applied, confidence). Emitted manually by the PM during revision authoring (see the autonomy-rule subsection above for the canonical bash one-liner). `scripts/ai-stats.sh` correlates these events with downstream phase outcomes to measure AI-assisted revision success.
+- `ai_second_opinion_consulted` (P2-D) — `ai-diagnose.js` auto-ran OpenAI gpt-5.2-pro after the primary Gemini diagnosis returned `confidence=low` (data: phase, diagnosis_num, primary_provider, primary_confidence, secondary_provider, secondary_confidence, cost=secondary-only, both_low). Tracked by `ai-stats.sh` for second-opinion adoption and cost.
+- `ai_escalation_recommended` (P2-D) — `ai-diagnose.js` flagged the phase for user intervention. Fires when `escalate_now=true AND confidence=high` (model is confident the spec is fundamentally wrong) OR when BOTH primary + second-opinion returned low-confidence. PM MUST halt auto-revision for this phase (see NEVER rule above). `scripts/notify.sh ai_escalation_recommended` writes to `notifications.md` automatically.
 - `project_complete` — all phases done
 
 ---
@@ -344,7 +346,11 @@ After every state change:
 - Update learnings
 - Advance to next phase
 - Make architecture decisions within brief constraints
-- Read `ai-diagnosis-NN.json` (when present after verify failure) and apply `suggested_revisions` directly to the revision spec when `confidence` is `high`. Pause for user when `confidence` is `low` OR `escalate_now=true`. (Phase D wires the escalation event into notify.sh automatically; this rule captures the human-facing behavior.)
+- Read `ai-diagnosis-NN.json` (when present after verify failure) and apply `suggested_revisions` directly to the revision spec when `confidence` is `high`. Pause for user when `confidence` is `low` OR `escalate_now=true`.
+
+### NEVER (escalation routing — P2-D)
+
+- **NEVER write a revision spec for a phase that has an unresolved `ai_escalation_recommended` event in `events.jsonl`.** When `ai-diagnose.js` fires `escalate_now=true` (with `confidence=high` OR after both primary + second-opinion came back low-confidence), it (a) emits `ai_escalation_recommended` to `events.jsonl`, (b) invokes `scripts/notify.sh ai_escalation_recommended` which writes to `notifications.md` + `latest-notification.json`. The phase stays in failed state. You MUST surface the escalation to the user (point at the diagnosis file + the latest notification) and wait for direction. Do NOT auto-revise. Do NOT auto-queue. Re-engage the auto-revision flow only after the user explicitly resolves or overrides the escalation.
 
 ### DO NOT without user:
 - Delete production data or force-push

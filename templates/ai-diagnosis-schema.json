@@ -81,19 +81,45 @@
         "totalCost": { "type": "number", "minimum": 0 },
         "currency": { "type": "string", "enum": ["USD"] }
       }
+    },
+    "second_opinion_used": {
+      "type": "boolean",
+      "description": "True when ai-diagnose.js consulted a second provider because the primary returned confidence=low (P2-D)."
+    },
+    "primary_provider": {
+      "type": "string",
+      "description": "Original provider before second-opinion swap. Only set when second_opinion_used=true."
+    },
+    "primary_confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "Original provider's confidence before second-opinion swap. Only set when second_opinion_used=true."
     }
   },
-  "if": {
-    "properties": { "escalate_now": { "const": true } },
-    "required": ["escalate_now"]
-  },
-  "then": {
-    "required": ["escalation_reason"],
-    "properties": {
-      "escalation_reason": {
-        "type": "string",
-        "minLength": 1
+  "allOf": [
+    {
+      "if": {
+        "properties": { "escalate_now": { "const": true } },
+        "required": ["escalate_now"]
+      },
+      "then": {
+        "required": ["escalation_reason"],
+        "properties": {
+          "escalation_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "second_opinion_used": { "const": true } },
+        "required": ["second_opinion_used"]
+      },
+      "then": {
+        "required": ["primary_provider", "primary_confidence"]
       }
     }
-  }
+  ]
 }

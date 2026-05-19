@@ -14,11 +14,18 @@
 //   2 schema validation failed (raw response preserved at ai-diagnosis-NN.raw.txt)
 //
 // Env vars:
-//   AI_CONSULT_PATH   default: ~/awsc-new/awesome/ai-consult
-//   AI_DIAGNOSE_MOCK  path to a JSON file with shape {feedback, usage, cost}.
-//                     When set, bypasses the ai-consult call and returns the
-//                     canned response. Used by integration-test.sh for
-//                     deterministic + cost-free CI runs.
+//   AI_CONSULT_PATH    default: ~/awsc-new/awesome/ai-consult
+//   AI_DIAGNOSE_MODEL  override the Gemini model id (e.g.,
+//                      'gemini-3.1-pro-preview-customtools' for the A/B variant
+//                      from ai-diagnose.sh --variant=customtools).
+//   AI_DIAGNOSE_MOCK   path to a JSON file. Two accepted shapes:
+//                      (a) Single: {feedback, usage, cost} — used as the
+//                          primary (and only) response.
+//                      (b) Pair:   {primary: {...}, secondary: {...}} — primary
+//                          is used first; secondary is consumed if the second-
+//                          opinion path triggers (primary low-confidence).
+//                      Lets integration tests cover both the single-pass and
+//                      the second-opinion code paths deterministically.
 
 const fs = require('fs');
 const path = require('path');
@@ -188,87 +195,164 @@ async function main() {
     fail(`Phase dir not found or not a directory: ${phaseDir}`, 1);
   }
   const phaseName = path.basename(phaseDir);
-  // Project root is the .planning sibling — walk up looking for one. Cap at 4 levels.
+  // Project root is the directory that has a .planning sibling. Check the
+  // phase-dir itself first (some smoke layouts put .planning inside the
+  // phase-dir), then walk up. Cap at 4 levels.
   let projectRoot = phaseDir;
-  for (let i = 0; i < 4; i++) {
-    const candidate = path.dirname(projectRoot);
-    if (fs.existsSync(path.join(candidate, '.planning'))) { projectRoot = candidate; break; }
-    projectRoot = candidate;
-    if (projectRoot === '/' || projectRoot === '') break;
+  if (!fs.existsSync(path.join(projectRoot, '.planning'))) {
+    let cursor = phaseDir;
+    for (let i = 0; i < 4; i++) {
+      const candidate = path.dirname(cursor);
+      if (fs.existsSync(path.join(candidate, '.planning'))) { projectRoot = candidate; break; }
+      cursor = candidate;
+      if (cursor === '/' || cursor === '') break;
+    }
+    // If still not found, fall back to the phase-dir's parent (preserves
+    // prior behavior — better than `/` for notify.sh + events appends).
+    if (!fs.existsSync(path.join(projectRoot, '.planning'))) {
+      projectRoot = path.dirname(phaseDir);
+    }
   }
 
   const context = buildContext({ phaseDir, projectRoot, phaseName });
   process.stderr.write(`[ai-diagnose] context bundled: ${context.length} chars\n`);
 
-  // Invoke ai-consult — OR use the AI_DIAGNOSE_MOCK env var to short-circuit
-  // with a canned response. The mock path lets integration tests run
-  // deterministically + cost-free. Mock file must be a JSON document with
-  // shape: { feedback: "<JSON string>", usage: {...}, cost: {...} }.
-  let r;
+  // ---- Mock loader (single OR {primary, secondary} shapes) ----
+  let mockPayload = null;
   if (process.env.AI_DIAGNOSE_MOCK) {
     try {
-      r = JSON.parse(fs.readFileSync(process.env.AI_DIAGNOSE_MOCK, 'utf8'));
+      const raw = JSON.parse(fs.readFileSync(process.env.AI_DIAGNOSE_MOCK, 'utf8'));
+      mockPayload = raw;
       process.stderr.write(`[ai-diagnose] using AI_DIAGNOSE_MOCK=${process.env.AI_DIAGNOSE_MOCK}\n`);
     } catch (e) {
       fail(`AI_DIAGNOSE_MOCK read failed: ${e.message}`, 1);
     }
-  } else {
+  }
+  function mockFor(slot /* 'primary' | 'secondary' */) {
+    if (!mockPayload) return null;
+    if (mockPayload.primary || mockPayload.secondary) return mockPayload[slot] || null;
+    return slot === 'primary' ? mockPayload : null;
+  }
+
+  // ---- One-shot diagnose: invoke ai-consult (or use mock) ----
+  async function diagnoseOnce({ provider, model, slot }) {
+    const mock = mockFor(slot);
+    if (mock) return mock;
     try {
       const ai = require(path.join(AI_CONSULT_PATH, 'index.js'));
-      r = await ai.reviewDocument({
-        provider: 'gemini',
-        content: context,
-        reviewType: 'diagnosis',
-      });
+      const opts = { provider, content: context, reviewType: 'diagnosis' };
+      if (model) opts.model = model;
+      return await ai.reviewDocument(opts);
     } catch (e) {
-      fail(`ai-consult call failed: ${e.message}`, 1);
+      fail(`ai-consult call failed (${provider}${model ? '/' + model : ''}): ${e.message}`, 1);
     }
   }
-  if (!r || typeof r.feedback !== 'string') fail('ai-consult returned no feedback', 1);
 
-  // Parse model JSON.
-  const num = nextDiagnosisNum(phaseDir);
-  const rawPath = path.join(phaseDir, `ai-diagnosis-${num}.raw.txt`);
-  let parsed;
-  try {
-    parsed = JSON.parse(r.feedback);
-  } catch (e) {
-    fs.writeFileSync(rawPath, r.feedback, 'utf8');
-    fail(`Model returned non-JSON; raw saved to ${rawPath}: ${e.message}`, 2);
+  function parseDiagnose(r, slot) {
+    if (!r || typeof r.feedback !== 'string') fail(`ai-consult returned no feedback (${slot})`, 1);
+    let parsed;
+    try { parsed = JSON.parse(r.feedback); }
+    catch (e) {
+      const num = nextDiagnosisNum(phaseDir);
+      const rawPath = path.join(phaseDir, `ai-diagnosis-${num}.raw.txt`);
+      fs.writeFileSync(rawPath, r.feedback, 'utf8');
+      fail(`${slot} returned non-JSON; raw saved to ${rawPath}: ${e.message}`, 2);
+    }
+    return parsed;
   }
 
-  // Augment with metadata.
-  const augmented = {
-    ...parsed,
-    provider: 'gemini',
-    model: process.env.GEMINI_MODEL_OVERRIDE || 'gemini-3.1-pro-preview',
-    timestamp: new Date().toISOString(),
-    cost: {
-      inputTokens: r.cost?.inputTokens ?? r.usage?.inputTokens ?? 0,
-      outputTokens: r.cost?.outputTokens ?? r.usage?.outputTokens ?? 0,
-      totalCost: r.cost?.totalCost ?? 0,
-      currency: r.cost?.currency || 'USD',
-    },
-  };
+  function augment(parsed, providerLabel, modelLabel, costObj) {
+    return {
+      ...parsed,
+      provider: providerLabel,
+      model: modelLabel,
+      timestamp: new Date().toISOString(),
+      cost: {
+        inputTokens: costObj?.inputTokens ?? 0,
+        outputTokens: costObj?.outputTokens ?? 0,
+        totalCost: costObj?.totalCost ?? 0,
+        currency: costObj?.currency || 'USD',
+      },
+    };
+  }
 
-  // Validate.
+  // ---- Primary run (Gemini, or AI_DIAGNOSE_MODEL override for --variant) ----
+  const primaryModel = process.env.AI_DIAGNOSE_MODEL || 'gemini-3.1-pro-preview';
+  const primaryR = await diagnoseOnce({ provider: 'gemini', model: primaryModel, slot: 'primary' });
+  const primaryParsed = parseDiagnose(primaryR, 'primary');
+  let augmented = augment(primaryParsed, 'gemini', primaryModel, primaryR.cost);
+
+  // ---- Second-opinion path: primary confidence === 'low' ----
+  let secondaryAugmented = null;
+  let secondOpinionUsed = false;
+  let bothLow = false;
+  let secondaryR = null;
+  if (augmented.confidence === 'low') {
+    console.log('ℹ️  Primary diagnosis low-confidence — consulting OpenAI gpt-5.2-pro for second opinion…');
+    secondaryR = await diagnoseOnce({ provider: 'openai', model: 'gpt-5.2-pro', slot: 'secondary' });
+    const secondaryParsed = parseDiagnose(secondaryR, 'secondary');
+    secondaryAugmented = augment(secondaryParsed, 'openai', 'gpt-5.2-pro', secondaryR.cost);
+    secondOpinionUsed = true;
+
+    const confidenceRank = (c) => ({ high: 2, medium: 1, low: 0 }[c] ?? -1);
+    if (confidenceRank(secondaryAugmented.confidence) > confidenceRank(augmented.confidence)) {
+      // Swap: secondary becomes primary; original primary becomes -secondary.
+      const rejected = augmented;
+      augmented = {
+        ...secondaryAugmented,
+        second_opinion_used: true,
+        primary_provider: 'gemini',
+        primary_confidence: rejected.confidence,
+      };
+      secondaryAugmented = rejected; // saved as -secondary.json
+    } else {
+      // Secondary did not improve. Tag primary with second_opinion_used metadata.
+      augmented = {
+        ...augmented,
+        second_opinion_used: true,
+        primary_provider: 'gemini',
+        primary_confidence: augmented.confidence,
+      };
+      if (secondaryAugmented.confidence === 'low') {
+        bothLow = true;
+        console.log('⚠️  Both providers low-confidence — escalating.');
+        if (!augmented.escalate_now) {
+          augmented.escalate_now = true;
+          augmented.escalation_reason = augmented.escalation_reason && augmented.escalation_reason.length
+            ? augmented.escalation_reason + ' · both providers low-confidence'
+            : 'both providers low-confidence';
+        }
+      }
+    }
+  }
+
+  // ---- Validate primary ----
   const v = validateSchema(augmented);
   if (!v.ok) {
-    fs.writeFileSync(rawPath, r.feedback, 'utf8');
+    const num = nextDiagnosisNum(phaseDir);
+    const rawPath = path.join(phaseDir, `ai-diagnosis-${num}.raw.txt`);
+    fs.writeFileSync(rawPath, primaryR.feedback, 'utf8');
     console.error(`[ai-diagnose] schema validation FAILED (${v.validator}):`);
     for (const e of v.errors) console.error('  -', JSON.stringify(e));
     console.error(`[ai-diagnose] raw model output preserved at ${rawPath}`);
     process.exit(2);
   }
 
-  // Write the diagnosis JSON.
+  // ---- Write files ----
+  const num = nextDiagnosisNum(phaseDir);
   const outPath = path.join(phaseDir, `ai-diagnosis-${num}.json`);
   fs.writeFileSync(outPath, JSON.stringify(augmented, null, 2) + '\n', 'utf8');
+  let secondaryPath = null;
+  if (secondaryAugmented) {
+    secondaryPath = path.join(phaseDir, `ai-diagnosis-${num}-secondary.json`);
+    fs.writeFileSync(secondaryPath, JSON.stringify(secondaryAugmented, null, 2) + '\n', 'utf8');
+  }
 
-  // Append event to .planning/events.jsonl (if .planning exists).
+  // ---- Events ----
   const eventsPath = path.join(projectRoot, '.planning', 'events.jsonl');
-  if (fs.existsSync(path.dirname(eventsPath))) {
-    const event = {
+  const eventsDirOk = fs.existsSync(path.dirname(eventsPath));
+  if (eventsDirOk) {
+    fs.appendFileSync(eventsPath, JSON.stringify({
       ts: new Date().toISOString(),
       event: 'ai_diagnostic_run',
       data: {
@@ -277,19 +361,87 @@ async function main() {
         confidence: augmented.confidence,
         escalate_now: augmented.escalate_now,
         cost: augmented.cost.totalCost,
+        model: augmented.model,
       },
-    };
-    fs.appendFileSync(eventsPath, JSON.stringify(event) + '\n', 'utf8');
+    }) + '\n', 'utf8');
+
+    if (secondOpinionUsed) {
+      // `cost` here is the SECONDARY-only cost — keeps ai-stats sum trivial
+      // (total = sum(ai_diagnostic_run.cost) + sum(ai_second_opinion_consulted.cost)).
+      // After a swap, secondaryAugmented holds the rejected primary; otherwise
+      // it holds the second-opinion response. Either way the secondary cost is
+      // `secondaryR.cost.totalCost` — pre-swap reference.
+      const secondaryCost = (secondaryR.cost?.totalCost) || 0;
+      fs.appendFileSync(eventsPath, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: 'ai_second_opinion_consulted',
+        data: {
+          phase: phaseName,
+          diagnosis_num: Number(num),
+          primary_provider: 'gemini',
+          primary_confidence: primaryParsed.confidence,
+          secondary_provider: 'openai',
+          secondary_confidence: secondaryAugmented
+            ? (secondaryAugmented.provider === 'openai' ? secondaryAugmented.confidence : augmented.confidence)
+            : augmented.confidence,
+          cost: secondaryCost,
+          both_low: bothLow,
+        },
+      }) + '\n', 'utf8');
+    }
   }
 
-  // Stdout summary.
+  // ---- Stdout summary ----
   const rc = augmented.root_cause.split('\n')[0].slice(0, 140);
   console.log(`Phase: ${phaseName}`);
   console.log(`Diagnosis #${num} saved to: ${outPath}`);
+  if (secondaryPath) console.log(`Secondary saved to: ${secondaryPath}`);
+  console.log(`Provider: ${augmented.provider} (${augmented.model})`);
   console.log(`Confidence: ${augmented.confidence}`);
   console.log(`Escalate: ${augmented.escalate_now ? 'yes' : 'no'}`);
   console.log(`Root cause: ${rc}`);
-  console.log(`Cost: $${augmented.cost.totalCost.toFixed(6)}`);
+  const totalCost = (augmented.cost.totalCost || 0) + (secondaryAugmented?.cost?.totalCost || 0);
+  console.log(`Cost: $${totalCost.toFixed(6)}${secondaryAugmented ? ' (primary + secondary)' : ''}`);
+
+  // ---- Escalation routing ----
+  // Two trigger paths:
+  //   (a) escalate_now=true AND confidence=high — the model is highly
+  //       confident the spec is fundamentally wrong (or repeated revisions
+  //       failed). PM should halt the auto-revision cycle for this phase.
+  //   (b) bothLow path above already forced escalate_now=true with the
+  //       "both providers low-confidence" reason. Same notify flow.
+  const shouldEscalate = (augmented.escalate_now === true && augmented.confidence === 'high') || bothLow;
+  if (shouldEscalate) {
+    const reason = augmented.escalation_reason || '(no reason given)';
+    console.log(`🚨 ESCALATION RECOMMENDED — see ${outPath}. Reason: ${reason}. notify.sh invoked.`);
+
+    if (eventsDirOk) {
+      fs.appendFileSync(eventsPath, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: 'ai_escalation_recommended',
+        data: {
+          phase: phaseName,
+          diagnosis_num: Number(num),
+          reason,
+          confidence: augmented.confidence,
+        },
+      }) + '\n', 'utf8');
+    }
+
+    // Invoke notify.sh — best-effort, never blocks the diagnostic exit.
+    const notifyBin = path.join(SCRIPT_DIR, 'notify.sh');
+    if (fs.existsSync(notifyBin)) {
+      try {
+        const detail = `Reason: ${reason} · Confidence: ${augmented.confidence} · Diagnosis: ${outPath} · Model: ${augmented.model} · Cost: $${totalCost.toFixed(6)}`;
+        execSync(
+          `bash "${notifyBin}" ai_escalation_recommended "${projectRoot}" --phase "${phaseName}" --detail "${detail.replace(/"/g, '\\"')}"`,
+          { stdio: 'inherit' }
+        );
+      } catch (e) {
+        console.warn('[ai-diagnose] notify.sh call failed (non-fatal):', e.message);
+      }
+    }
+  }
 }
 
 main().catch(e => fail(e.stack || e.message, 1));
