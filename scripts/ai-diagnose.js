@@ -49,6 +49,59 @@ const SCHEMA_PATH = path.join(ORCHESTRATOR_ROOT, 'templates', 'ai-diagnosis-sche
 const MAX_DIFF_LINES = 500;
 const MAX_EVENTS = 50;
 
+// P2-E: response-schema handed to the provider API so the model is
+// constrained to emit a valid JSON object. NOT the canonical
+// templates/ai-diagnosis-schema.json (which validates the FULL augmented row
+// including provider/timestamp/cost added by THIS script).
+//
+// Compatibility gating: both Gemini (OpenAPI 3.0 subset) and OpenAI strict
+// json_schema mode reject conditional logic (allOf/oneOf/if-then) and
+// require flat structures with all properties listed in `required` and
+// `additionalProperties: false`. This shape satisfies both.
+// escalation_reason is unconditionally required at the schema level; the
+// prompt + the canonical ajv pass enforce non-empty iff escalate_now=true.
+const MODEL_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    diagnosis: { type: 'string' },
+    root_cause: { type: 'string' },
+    suggested_revisions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          section: { type: 'string' },
+          change: { type: 'string' },
+        },
+        required: ['section', 'change'],
+        additionalProperties: false,
+      },
+    },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    escalate_now: { type: 'boolean' },
+    escalation_reason: { type: 'string' },
+  },
+  required: ['diagnosis', 'root_cause', 'suggested_revisions', 'confidence', 'escalate_now', 'escalation_reason'],
+  additionalProperties: false,
+};
+
+// Gemini's OpenAPI 3.0 subset rejects `additionalProperties` (and a handful
+// of other JSON-Schema-only keywords). Walk the canonical schema and drop
+// unsupported keys for the Gemini wire format.
+function toGeminiSchema(node) {
+  if (Array.isArray(node)) return node.map(toGeminiSchema);
+  if (node && typeof node === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (k === 'additionalProperties') continue;       // not supported
+      if (k === '$schema' || k === '$id') continue;     // not supported
+      out[k] = toGeminiSchema(v);
+    }
+    return out;
+  }
+  return node;
+}
+
 function fail(msg, code = 1) {
   console.error(`[ai-diagnose] ${msg}`);
   process.exit(code);
@@ -240,7 +293,20 @@ async function main() {
     if (mock) return mock;
     try {
       const ai = require(path.join(AI_CONSULT_PATH, 'index.js'));
-      const opts = { provider, content: context, reviewType: 'diagnosis' };
+      const opts = {
+        provider,
+        content: context,
+        reviewType: 'diagnosis',
+        // P2-E: API-enforced structured output. Eliminates the brittle
+        // JSON-parse failures we observed on complex specs where the model
+        // emitted illegal escape sequences inside string values.
+        // Schema shape differs per provider: Gemini OpenAPI subset (no
+        // additionalProperties); OpenAI strict (additionalProperties:false).
+        responseSchema: provider === 'gemini'
+          ? toGeminiSchema(MODEL_RESPONSE_SCHEMA)
+          : MODEL_RESPONSE_SCHEMA,
+        responseSchemaName: 'diagnosis',
+      };
       if (model) opts.model = model;
       return await ai.reviewDocument(opts);
     } catch (e) {
