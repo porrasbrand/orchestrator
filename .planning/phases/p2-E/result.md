@@ -10,8 +10,8 @@
 
 | Repo | Hash | Prefix + title |
 |------|------|----------------|
-| ai-consult   | _(stamped below)_ | `[ai-consult-p2-E] Add responseSchema option to gemini + openai providers` |
-| orchestrator | _(stamped below)_ | `[orchestrator-p2-E] Wire MODEL_RESPONSE_SCHEMA through ai-diagnose.js for API-enforced JSON` |
+| ai-consult   | `b818724` | `[ai-consult-p2-E] Add responseSchema option to gemini + openai providers` |
+| orchestrator | `bfefa9e` | `[orchestrator-p2-E] Wire MODEL_RESPONSE_SCHEMA through ai-diagnose.js for API-enforced JSON` |
 
 ## What changed
 
