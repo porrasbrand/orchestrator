@@ -365,3 +365,53 @@ After every state change:
 - Trust result.md without running smoke tests
 - Queue the next phase before verifying the current one
 - Modify brief.md — it's immutable (the user's original intent)
+
+
+---
+
+## AI Feedback Loop — Consult Between Cycles
+
+**Full doc:** [docs/ai-feedback-loop.md](docs/ai-feedback-loop.md)
+
+For iterative/creative work (video production, UI design, multi-cycle improvements), consult an external AI between batches to prevent blind execution:
+
+```
+Dispatch Batch N  ──→  consult-gemini (parallel)
+       │                        │
+       ▼                        ▼
+  Batch N done           Gemini feedback
+       └──── merge ─────────────┘
+                  │
+     Adjust Batch N+1 spec (cut/add/reorder)
+                  │
+          Dispatch Batch N+1 ──→ consult-openai
+                 ... (repeat, alternating providers) ...
+```
+
+**When to use:** User says "consult between cycles", or the work is creative/subjective (no binary pass/fail).
+
+**How:**
+1. Dispatch batch to worker
+2. Simultaneously write context file → SCP to worker → `consult-gemini` (or `consult-openai`)
+3. When both responses arrive: verify batch, read AI feedback, adjust next batch spec
+4. Include in next spec: `"AI feedback applied: [changes]"`
+
+**Rules:** Never skip consultation. Ask what to CUT, not just what to ADD. Alternate providers. PM makes final call — AI feedback is input, not instruction.
+
+---
+
+## Generative Refinement Loop — 3-Tier Autonomous Improvement
+
+**Full doc:** [docs/generative-refinement-loop.md](docs/generative-refinement-loop.md)
+
+For iterative quality improvement (visual polish, performance optimization, AI response quality), dispatch to wsl2 as Level 1 Planner:
+
+```
+>>wsl2 GENERATIVE REFINEMENT LOOP — [objective]. Target: [criteria]. Evaluation: [command].
+```
+
+The Planner autonomously: evaluates → identifies weakest dimension → writes spec → dispatches to hetzner → verifies → repeats until criteria met. Reports progress on Slack. Level 0 only reviews milestones.
+
+**Requirements:** project must have a measurable evaluation method (script, test suite, or metric) and clear acceptance criteria (numeric threshold).
+
+**Use when:** task needs >3 improvement cycles, quality is subjective, or expected to exceed 1 context window.
