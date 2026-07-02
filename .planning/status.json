@@ -3,19 +3,19 @@
   "created": "2026-07-02",
   "updated": "2026-07-02",
   "status": "in-progress",
-  "current_phase": "r1-01-dispatch-ledger",
+  "current_phase": "r1-02-pm-iterate",
   "checkpoint_frequency": 3,
-  "phases_since_checkpoint": 0,
+  "phases_since_checkpoint": 1,
   "target_worker": "hetzner",
   "phases": {
     "r1-01-dispatch-ledger": {
-      "status": "queued",
+      "status": "complete",
       "complexity": "standard",
       "depends_on": [],
       "revisions": 0
     },
     "r1-02-pm-iterate": {
-      "status": "pending",
+      "status": "specified",
       "complexity": "complex",
       "depends_on": [
         "r1-01-dispatch-ledger"
@@ -66,10 +66,10 @@
   "blocked": false,
   "blocked_reason": null,
   "metrics": {
-    "phases_complete": 0,
+    "phases_complete": 1,
     "phases_total": 6,
     "total_revisions": 0,
-    "total_smoke_tests": 0,
+    "total_smoke_tests": 11,
     "started_at": "2026-07-02T00:00:00Z"
   }
 }
