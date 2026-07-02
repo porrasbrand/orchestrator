@@ -31,7 +31,7 @@
       "revisions": 0
     },
     "r2-04-slack-notify": {
-      "status": "pending",
+      "status": "queued",
       "complexity": "standard",
       "depends_on": [],
       "revisions": 0
