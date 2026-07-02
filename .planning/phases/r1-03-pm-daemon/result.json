@@ -1,0 +1,38 @@
+{
+  "status": "complete",
+  "files_modified": [
+    "services/pm-daemon.js",
+    "scripts/run-pm-daemon.sh",
+    "scripts/pm-iterate.sh",
+    "templates/test-fixtures/mock-pm-iterate.sh",
+    ".planning/phases/r1-03-pm-daemon/smoke-tests.sh",
+    ".planning/phases/r1-03-pm-daemon/result.md",
+    ".planning/phases/r1-03-pm-daemon/result.json"
+  ],
+  "tests_run": [
+    "T1a: 111.json archived",
+    "T1b: mock invoked with --trigger response",
+    "T1c: mock invoked with projA path",
+    "T2: non-ledger 999.json left in new/ (+ mock log empty)",
+    "T3: fresh 111.json left in new/ (grace=3600)",
+    "T3b: deactivated projA response left in new/",
+    "T4a: after attempt 1, 222.json still in claimed/",
+    "T4b: attempts=1 in daemon-state.json",
+    "T4c: after attempt 2, 222.json moved to failed/",
+    "T4d: pm_daemon_gave_up event landed with task_id=222 attempts=2",
+    "T5a: SKIP: leaves 111.json in claimed/",
+    "T5b: no attempts recorded for SKIP",
+    "T6a: only projA(specified) poked; projB(queued+fresh) not poked",
+    "T6b: projB(queued+stall) poked after aging event",
+    "T7: paused blocks scan + tick",
+    "T8: events.jsonl line count unchanged after --dry-run",
+    "T9a: two invocations recorded",
+    "T9b: pm-iterate invocations sequential (>= 0.4s apart)",
+    "REGRESSION r1-02: 16/16 still green after pm-iterate.sh bugfix"
+  ],
+  "tests_passed": 19,
+  "tests_failed": 0,
+  "regression_r1_02": "16/16 pass",
+  "blockers": [],
+  "summary": "Stdlib-only Node daemon watches super-agent responses, atomically claims ledger-matched files after PM_GRACE_PERIOD, single-flight spawns pm-iterate.sh with the correct trigger + response file, and dispositions by outcome (archive on exit 0, retry then failed/ + pm_daemon_gave_up event on non-zero, leave in place on SKIP:). Tick cycle only pokes actionable phases (pending/specified/verifying, or queued past PM_STALL_TIMEOUT). --once mode drives all tests; real claude never invoked. Also fixed r1-02 dry-run side-effect (moved pm_iteration event write below the --dry-run short-circuit); r1-02 suite still 16/16."
+}

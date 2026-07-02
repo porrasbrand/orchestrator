@@ -186,6 +186,12 @@ TRANSCRIPT_FILE="$RUNS_DIR/$PROJECT_NAME/${TS_SLUG}-transcript.log"
     printf '%s\n' "- Update \`.planning/status.json\` + \`events.jsonl\`, commit \`.planning/\` with prefix \`[$PROJECT_NAME-orchestrator]\`, and push, before exiting."
 } > "$PROMPT_FILE"
 
+# --- dry-run short-circuit (must be side-effect free beyond the prompt file) ---
+if [[ "$DRY_RUN" == "1" ]]; then
+    echo "DRYRUN: prompt at $PROMPT_FILE"
+    exit 0
+fi
+
 # --- iteration_started event (before invoking claude) ---
 if [[ -d "$ABS_PROJECT_PATH/.planning" ]]; then
     EVENT_LINE="$(jq -c -n \
@@ -193,12 +199,6 @@ if [[ -d "$ABS_PROJECT_PATH/.planning" ]]; then
         --arg trigger "$TRIGGER" \
         '{ts: $ts, event: "pm_iteration", data: {trigger: $trigger, runner: "pm-iterate"}}')"
     printf '%s\n' "$EVENT_LINE" >> "$EVENTS_JSONL"
-fi
-
-# --- dry-run short-circuit ---
-if [[ "$DRY_RUN" == "1" ]]; then
-    echo "DRYRUN: prompt at $PROMPT_FILE"
-    exit 0
 fi
 
 # ============================================================
