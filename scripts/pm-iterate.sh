@@ -149,6 +149,23 @@ if [[ -f "$STATUS_JSON" && -f "$EVENTS_JSONL" ]]; then
     fi
 fi
 
+# G6: checkpoint gate — project-scoped (not per-phase). Rule: consider the
+# latest of {checkpoint, checkpoint_acknowledged, phase_queued} in events.jsonl.
+# If that latest event is `checkpoint` AND trigger != resolution → gate closed.
+# A `phase_queued` AFTER a checkpoint keeps the gate OPEN (backward-compat with
+# projects that resumed via an interactive session before r2-05 existed).
+if [[ -f "$EVENTS_JSONL" ]]; then
+    LATEST_CP="$(jq -rs '
+        map(select(.event == "checkpoint" or .event == "checkpoint_acknowledged" or .event == "phase_queued"))
+        | last // empty
+        | .event // ""
+    ' "$EVENTS_JSONL" 2>/dev/null || true)"
+    if [[ "$LATEST_CP" == "checkpoint" && "$TRIGGER" != "resolution" ]]; then
+        echo "SKIP: checkpoint-awaiting-human"
+        exit 0
+    fi
+fi
+
 # ============================================================
 # PROMPT BUILD
 # ============================================================

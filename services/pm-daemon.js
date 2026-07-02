@@ -41,6 +41,8 @@ const TICK_INTERVAL = numEnv('PM_TICK_INTERVAL', 900);
 const STALL_TIMEOUT = numEnv('PM_STALL_TIMEOUT', 14400);
 const MAX_ATTEMPTS = numEnv('PM_MAX_ATTEMPTS', 2);
 const PM_ITERATE_BIN = process.env.PM_ITERATE_BIN || path.join(REPO_DIR, 'scripts', 'pm-iterate.sh');
+const RESOLUTIONS_INTERVAL = numEnv('PM_RESOLUTIONS_INTERVAL', 120);
+const PM_RESOLUTIONS_BIN = process.env.PM_RESOLUTIONS_BIN || path.join(REPO_DIR, 'scripts', 'slack-poll-resolutions.sh');
 
 const RESP_NEW = path.join(SUPER_AGENT_DIR, 'tasks', 'responses', 'new');
 const RESP_CLAIMED = path.join(SUPER_AGENT_DIR, 'tasks', 'responses', 'claimed');
@@ -300,18 +302,43 @@ function tickCycle() {
         '| skipped:', skipped.length ? skipped.join(', ') : '(none)');
 }
 
+// ---- resolutions cycle (r2-05 Slack inbound polling) ----
+function resolutionsCycle() {
+    if (fs.existsSync(PAUSED_FILE)) {
+        log('paused — skipping resolutions cycle');
+        return;
+    }
+    if (!fs.existsSync(PM_RESOLUTIONS_BIN)) return; // bare install, silent
+    try {
+        const st = fs.statSync(PM_RESOLUTIONS_BIN);
+        if (!(st.mode & 0o111)) return; // not executable
+    } catch { return; }
+    log('spawn (resolutions):', PM_RESOLUTIONS_BIN);
+    const r = spawnSync(PM_RESOLUTIONS_BIN, [], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env,
+        cwd: REPO_DIR,
+    });
+    const stdout = (r.stdout || '').toString().trim();
+    const stderr = (r.stderr || '').toString().trim();
+    if (stdout) log('resolutions stdout:', stdout.slice(0, 400));
+    if (stderr) log('resolutions stderr:', stderr.slice(0, 400));
+    log('resolutions exit=' + (r.status ?? 1));
+}
+
 // ---- main ----
 function main() {
     ensureDir(STATE_DIR);
     log('pm-daemon starting; state=' + STATE_DIR, 'super_agent=' + SUPER_AGENT_DIR,
         'grace=' + GRACE_PERIOD + 's', 'poll=' + POLL_INTERVAL + 's', 'tick=' + TICK_INTERVAL + 's',
-        'max_attempts=' + MAX_ATTEMPTS);
+        'resolutions=' + RESOLUTIONS_INTERVAL + 's', 'max_attempts=' + MAX_ATTEMPTS);
 
     const once = process.argv.includes('--once');
     if (once) {
-        log('--once mode: single scan + tick cycle');
+        log('--once mode: single scan + tick + resolutions cycle');
         try { scanCycle(); } catch (e) { log('scan error:', e && e.stack || e); }
         try { tickCycle(); } catch (e) { log('tick error:', e && e.stack || e); }
+        try { resolutionsCycle(); } catch (e) { log('resolutions error:', e && e.stack || e); }
         return;
     }
 
@@ -322,9 +349,13 @@ function main() {
     setInterval(() => {
         try { tickCycle(); } catch (e) { log('tick error:', e && e.stack || e); }
     }, TICK_INTERVAL * 1000);
+    setInterval(() => {
+        try { resolutionsCycle(); } catch (e) { log('resolutions error:', e && e.stack || e); }
+    }, RESOLUTIONS_INTERVAL * 1000);
     // Immediate first cycles so pm2 restarts pick up work fast.
     try { scanCycle(); } catch (e) { log('scan error:', e && e.stack || e); }
     try { tickCycle(); } catch (e) { log('tick error:', e && e.stack || e); }
+    try { resolutionsCycle(); } catch (e) { log('resolutions error:', e && e.stack || e); }
 }
 
 main();
