@@ -1,0 +1,37 @@
+{
+  "status": "complete",
+  "files_modified": [
+    "config/notify-hook.sh",
+    "scripts/notify.sh",
+    ".planning/phases/r2-04-slack-notify/smoke-tests.sh",
+    ".planning/phases/r2-04-slack-notify/result.md",
+    ".planning/phases/r2-04-slack-notify/result.json"
+  ],
+  "tests_run": [
+    "T1: graceful no-op without config",
+    "T2a: exactly 2 mock calls (root + reply)",
+    "T2b: root line has no thread_ts",
+    "T2c: reply line has synthesized thread_ts",
+    "T2d: projA entry in slack-threads.json",
+    "T3: same-project 2nd notification threaded under same ts",
+    "T4: second project → separate root + distinct thread_ts",
+    "T5a: escalation payload has 🚨 + reply_broadcast:true",
+    "T5b: phase_complete has no reply_broadcast",
+    "T6: corrupt slack-threads.json rebuilt",
+    "T7: SLACK_MOCK_FAIL tolerated by notify.sh (exit 0 + files written)",
+    "T8a: checkpoint end-to-end writes Checkpoint heading",
+    "T8b: checkpoint mock payload has 🛑",
+    "T9: token never leaked in hook stdout/stderr",
+    "T10a: bash -n clean on hook + notify.sh",
+    "T10b: r1-01 still 11/11",
+    "T10c: r1-02 still 16/16",
+    "T10d: r1-03 still 19/19"
+  ],
+  "tests_passed": 18,
+  "tests_failed": 0,
+  "regression_r1_01": "11/11 pass",
+  "regression_r1_02": "16/16 pass",
+  "regression_r1_03": "19/19 pass",
+  "blockers": [],
+  "summary": "config/notify-hook.sh (Slack outbound hook) + checkpoint event in notify.sh. Per-project threading tracked in slack-threads.json (atomic writes; corrupt-file auto-rebuild). Attention events (escalation/failed/checkpoint/project_complete) set reply_broadcast:true. SLACK_MOCK JSONL sink is the sole test path — no real Slack calls, no tokens in repo. Graceful no-op when neither SLACK_MOCK nor slack.env is present. Token never appears in hook stdout/stderr (verified with synthetic TESTSECRET123). 18/18 pass; all R1 suites still green (11+16+19)."
+}

@@ -29,6 +29,7 @@ Event types:
   regression_failed          Regression tests broke after merge
   project_complete           All phases in project completed
   ai_escalation_recommended  AI diagnostic flagged escalate_now=true
+  checkpoint                 Project checkpoint reached (R2)
 
 Options:
   --phase <name>      Phase name (e.g., 01-verify-error-clarity)
@@ -71,7 +72,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Validate event type ---
-VALID_EVENTS="phase_complete phase_failed verification_failed regression_failed project_complete ai_escalation_recommended"
+VALID_EVENTS="phase_complete phase_failed verification_failed regression_failed project_complete ai_escalation_recommended checkpoint"
 if ! echo "$VALID_EVENTS" | grep -qw "$EVENT_TYPE"; then
     echo "Error: Invalid event type '$EVENT_TYPE'" >&2
     echo "Valid types: $VALID_EVENTS" >&2
@@ -117,6 +118,9 @@ format_message() {
             ;;
         ai_escalation_recommended)
             echo "🚨 [${PROJECT_NAME}] AI escalation recommended: ${phase}"
+            ;;
+        checkpoint)
+            echo "Checkpoint: ${phase}"
             ;;
     esac
 }
