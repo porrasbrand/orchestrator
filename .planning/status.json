@@ -3,9 +3,9 @@
   "created": "2026-07-02",
   "updated": "2026-07-02",
   "status": "in-progress",
-  "current_phase": "r2-04-slack-notify",
+  "current_phase": "r2-05-slack-resolutions",
   "checkpoint_frequency": 3,
-  "phases_since_checkpoint": 0,
+  "phases_since_checkpoint": 1,
   "target_worker": "hetzner",
   "phases": {
     "r1-01-dispatch-ledger": {
@@ -31,7 +31,7 @@
       "revisions": 0
     },
     "r2-04-slack-notify": {
-      "status": "queued",
+      "status": "complete",
       "complexity": "standard",
       "depends_on": [],
       "revisions": 0
@@ -66,10 +66,10 @@
   "blocked": false,
   "blocked_reason": null,
   "metrics": {
-    "phases_complete": 3,
+    "phases_complete": 4,
     "phases_total": 6,
     "total_revisions": 0,
-    "total_smoke_tests": 46,
+    "total_smoke_tests": 64,
     "started_at": "2026-07-02T00:00:00Z"
   }
 }
