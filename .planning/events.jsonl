@@ -87,3 +87,4 @@
 {"ts":"2026-07-02T14:33:08Z","event":"smoke_test_pass","data":{"phase":"r1-01-dispatch-ledger","passed":11,"failed":0,"ran_on":["hetzner","lipo-360"]}}
 {"ts":"2026-07-02T14:33:08Z","event":"phase_complete","data":{"phase":"r1-01-dispatch-ledger","commit":"7c9f4f0","revisions":0}}
 {"ts":"2026-07-02T14:34:27Z","event":"phase_specified","data":{"phase":"r1-02-pm-iterate","spec_check":"PASS"}}
+{"ts":"2026-07-02T14:34:48Z","event":"phase_queued","data":{"phase":"r1-02-pm-iterate","task_id":"1783002878560981","worker":"hetzner"}}

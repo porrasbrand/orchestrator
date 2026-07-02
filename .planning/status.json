@@ -15,7 +15,7 @@
       "revisions": 0
     },
     "r1-02-pm-iterate": {
-      "status": "specified",
+      "status": "queued",
       "complexity": "complex",
       "depends_on": [
         "r1-01-dispatch-ledger"
