@@ -192,4 +192,4 @@ test "$(wc -l < "$ORCH_STATE_DIR/dispatch-ledger.jsonl")" = "$BEFORE"
 1. Run `bash -n` on both scripts, then run `smoke-tests.sh` — all tests must pass.
 2. Write `.planning/phases/r1-01-dispatch-ledger/result.md` (summary, decisions, test
    output) and `result.json` (`{status, files_modified[], tests_run[], blockers[], summary}`).
-3. Commit with prefix `[orchestrator-r1-01]` and push to origin main.
+3. Commit with prefix `[orchestrator-r1-01]` and push to origin master.
