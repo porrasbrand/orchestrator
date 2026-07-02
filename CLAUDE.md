@@ -415,3 +415,77 @@ The Planner autonomously: evaluates → identifies weakest dimension → writes 
 **Requirements:** project must have a measurable evaluation method (script, test suite, or metric) and clear acceptance criteria (numeric threshold).
 
 **Use when:** task needs >3 improvement cycles, quality is subjective, or expected to exceed 1 context window.
+
+---
+
+## Resident PM (daemon-first operation)
+
+The Resident PM lets orchestrated projects advance without an open interactive session.
+A background daemon on the controller (`pm2 name: pm-daemon`, script:
+`scripts/run-pm-daemon.sh`) claims worker responses, spawns headless
+`scripts/pm-iterate.sh` runs, and polls Slack for human resolutions of escalations /
+checkpoints. Interactive sessions remain primary — the daemon is a fallback.
+
+### Division of labor
+
+- **Interactive session first.** If a live PM session is open, it handles the response
+  and archives the file to `tasks/responses/archive/`; the daemon then sees nothing
+  in `tasks/responses/new/` and skips.
+- **Daemon second.** Only files still in `new/` after `PM_GRACE_PERIOD` (default 600 s)
+  are candidates. The daemon claims only when the `task_id` matches a line in
+  `~/.orchestrator/dispatch-ledger.jsonl` — non-orchestrated tasks are ignored by
+  construction.
+- **Ticks are gated.** The tick cycle pokes an active project only if its current-phase
+  status is `pending` / `specified` / `verifying`, or `queued` past `PM_STALL_TIMEOUT`.
+  `complete` / `blocked` / etc. → skipped. Steady-state cost ≈ 0.
+
+### ITERATION SEMANTICS (verbatim clarification)
+
+One `pm-iterate` invocation = ONE phase advance. Exactly one of:
+
+- verify-and-complete (worker output passes → mark phase complete + spec/queue next), OR
+- verify-and-revise (worker output fails → write revision spec + queue revision), OR
+- spec-and-queue next phase (from a `pending`/`specified` state).
+
+The headless PM MUST NOT loop. The daemon provides cadence via `PM_POLL_INTERVAL` /
+`PM_TICK_INTERVAL` / `PM_RESOLUTIONS_INTERVAL`. Two state transitions in one iteration
+is a bug — spec forbids it.
+
+### Override consumption (headless-PM instruction)
+
+When authoring a revision spec, read `.planning/resolutions.jsonl`. If the newest
+entry for the current phase has `kind=override`, inject its `text` verbatim into the
+revision spec's Additional Guidance section, and reference the reply's `user` + `reply_ts`
+so the audit trail is intact. Do not re-inject the same override on a subsequent
+revision — treat each override as consumed after one use.
+
+### Kill switches
+
+| Switch | Effect | Reverse it by |
+|---|---|---|
+| `~/.orchestrator/paused` (touch this file) | Every daemon cycle logs + no-ops; every direct `pm-iterate.sh` invocation returns `SKIP: paused`. | `rm ~/.orchestrator/paused` |
+| `<project>/.planning/interrupt.json` (any JSON blob) | Direct `pm-iterate.sh` returns `SKIP: interrupted` for THIS project only; daemon's own guards still work. | `rm <project>/.planning/interrupt.json` |
+| `pm2 stop pm-daemon` | Process-level kill switch; interactive session unaffected. | `pm2 start pm-daemon` (or `pm2 restart pm-daemon`) |
+
+### Env tuning (all knobs, current defaults)
+
+| Env var | Default | Effect |
+|---|---:|---|
+| `ORCH_STATE_DIR` | `$HOME/.orchestrator` | Root of the daemon's state (registry, ledger, iterations.jsonl, locks, runs/, threads, resolutions cursor). |
+| `SUPER_AGENT_DIR` | `$HOME/awesome/super-agent` | Where the daemon reads `tasks/responses/new|claimed|archive|failed/`. |
+| `PM_GRACE_PERIOD` | `600` s | A response must sit in `new/` at least this long before the daemon claims it. Must be > 0. |
+| `PM_POLL_INTERVAL` | `60` s | Response-scan cycle cadence. |
+| `PM_TICK_INTERVAL` | `900` s | Project-tick cycle cadence. |
+| `PM_STALL_TIMEOUT` | `14400` s | A `queued` phase older than this triggers a stall-poke tick. |
+| `PM_RESOLUTIONS_INTERVAL` | `120` s | Slack inbound poller cadence. |
+| `PM_MAX_ATTEMPTS` | `2` | Attempts per claimed response before it moves to `failed/` with a `pm_daemon_gave_up` event. |
+| `PM_ITERATE_BIN` | `<repo>/scripts/pm-iterate.sh` | Override for tests (recorder scripts, etc.). |
+| `PM_RESOLUTIONS_BIN` | `<repo>/scripts/slack-poll-resolutions.sh` | Override for tests; missing/non-executable → silent no-op. |
+| `PM_MAX_ITER_PER_HOUR` | `6` | pm-iterate hourly cap per project (G4). |
+| `PM_MAX_TURNS` | `80` | claude `--max-turns` for the headless PM. |
+| `PM_ITERATE_TIMEOUT` | `1800` s | `timeout` around the `claude -p` call. |
+| `PM_CLAUDE_MODEL` | (unset → CLI default) | `--model` override. |
+| `PM_CLAUDE_BIN` | `claude` | claude CLI path. |
+| `PM_ITERATE_MOCK` | (unset) | Path to a canned transcript; when set, mock mode — no claude call. |
+| `PM_ITERATE_MOCK_EXIT` | `0` | Mock mode: force this exit code. |
+

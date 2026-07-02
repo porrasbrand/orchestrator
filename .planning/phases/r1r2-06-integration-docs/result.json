@@ -1,0 +1,47 @@
+{
+  "status": "complete",
+  "files_modified": [
+    "scripts/integration-test-pm.sh",
+    "docs/RESIDENT-PM-RUNBOOK.md",
+    "CLAUDE.md",
+    "config/notify-hook.sh.example",
+    ".planning/phases/r1r2-06-integration-docs/smoke-tests.sh",
+    ".planning/phases/r1r2-06-integration-docs/result.md",
+    ".planning/phases/r1r2-06-integration-docs/result.json"
+  ],
+  "tests_run": [
+    "S1: response → grace-claim → REAL pm-iterate → archived (4 asserts)",
+    "S2: escalation → notify → G5 SKIP → continue → G5 reopened (8 asserts)",
+    "S3: checkpoint → G6 SKIP → continue → checkpoint_acknowledged → reopened (6 asserts)",
+    "S4: abort → blocked + phase_aborted + notify; daemon ignores project (5 asserts)",
+    "S5: kill switches (paused / interrupt.json), reversible (4 asserts)",
+    "T1: integration-test-pm.sh syntax + executable",
+    "T2: integration suite exit 0 + scenarios=5 FAIL=0",
+    "T3: idempotent re-run",
+    "T4a–T4e: CLAUDE.md landmarks",
+    "T5a + T5×6: RESIDENT-PM-RUNBOOK.md landmarks",
+    "T6a + T6b: notify-hook.sh.example header only",
+    "T7 × 5: r1-01 11/11, r1-02 16/16, r1-03 19/19, r2-04 18/18, r2-05 32/32"
+  ],
+  "integration_scenarios_passed": 5,
+  "integration_assertions_passed": 27,
+  "integration_assertions_failed": 0,
+  "wrapper_tests_passed": 22,
+  "wrapper_tests_failed": 0,
+  "regression_r1_01": "11/11",
+  "regression_r1_02": "16/16",
+  "regression_r1_03": "19/19",
+  "regression_r2_04": "18/18",
+  "regression_r2_05": "32/32",
+  "findings": [
+    {
+      "id": "F1",
+      "title": "PM_GRACE_PERIOD=0 silently rejected",
+      "severity": "minor",
+      "detail": "services/pm-daemon.js numEnv() uses `v > 0` so 0 falls back to the 600s default. Spec suggested grace=0 for S1 instant-claim; not achievable without editing shipped code. Workaround in test: grace=1 + sleep 2. No fix per spec: hardening logged for r3+.",
+      "xfail": false
+    }
+  ],
+  "blockers": [],
+  "summary": "Final phase for orchestrator-r1r2. scripts/integration-test-pm.sh runs 5 chain scenarios (27 assertions across component seams) with only externals mocked — real pm-daemon.js/pm-iterate.sh/slack-poll-resolutions.sh/notify.sh/notify-hook.sh in every scenario. CLAUDE.md gains a Resident PM section; docs/RESIDENT-PM-RUNBOOK.md ships deploy/monitor/failure playbook grounded in real filenames+events; notify-hook.sh.example header updated (byte-identical below). 22/22 wrapper + 27/27 integration + 96/96 prior suites = 145 hermetic tests total, all green. One documented finding (F1) — grace=0 silently rejected — worked around test-side, logged for future daemon hardening. Project orchestrator-r1r2 COMPLETE."
+}

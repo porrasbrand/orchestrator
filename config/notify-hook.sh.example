@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# notify-hook.sh.example — Example notification hook for the orchestrator
+# notify-hook.sh.example — Example / template notification hook for the orchestrator
 #
-# Copy this file to config/notify-hook.sh and make it executable:
+# A PRODUCTION Slack hook shipped in r2-04 at `config/notify-hook.sh` — it uses
+# Slack's chat.postMessage API to post each notification into a per-project thread
+# in the `#orchestrator` channel (thread map at $ORCH_STATE_DIR/slack-threads.json).
+# It supports SLACK_MOCK for hermetic tests and no-ops gracefully when slack.env
+# is absent. If you just want Slack, use that hook — no custom code needed.
+#
+# THIS file remains a minimal template if you'd rather roll your own destination
+# (webhooks, e-mail, PagerDuty, tickets, etc.). Copy and adapt:
 #   cp config/notify-hook.sh.example config/notify-hook.sh
 #   chmod +x config/notify-hook.sh
 #
