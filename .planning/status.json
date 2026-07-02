@@ -37,7 +37,7 @@
       "revisions": 0
     },
     "r2-05-slack-resolutions": {
-      "status": "pending",
+      "status": "queued",
       "complexity": "complex",
       "depends_on": [
         "r1-03-pm-daemon",

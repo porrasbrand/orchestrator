@@ -104,3 +104,6 @@
 {"ts":"2026-07-02T15:08:28Z","event":"phase_response","data":{"phase":"r2-04-slack-notify","task_id":"1783004447053204"}}
 {"ts":"2026-07-02T15:08:28Z","event":"smoke_test_pass","data":{"phase":"r2-04-slack-notify","passed":18,"failed":0,"ran_on":["hetzner","lipo-360"]}}
 {"ts":"2026-07-02T15:08:28Z","event":"phase_complete","data":{"phase":"r2-04-slack-notify","commit":"4982864","revisions":0}}
+{"ts":"2026-07-02T15:10:56Z","event":"pm_iteration","data":{"trigger":"tick","runner":"pm-iterate"}}
+{"ts":"2026-07-02T15:16:56Z","event":"phase_specified","data":{"phase":"r2-05-slack-resolutions","spec_check":"PASS"}}
+{"ts":"2026-07-02T15:17:07Z","event":"phase_queued","data":{"phase":"r2-05-slack-resolutions","task_id":"1783005425642308","worker":"hetzner"}}
