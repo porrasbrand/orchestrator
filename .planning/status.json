@@ -9,7 +9,7 @@
   "target_worker": "hetzner",
   "phases": {
     "r1-01-dispatch-ledger": {
-      "status": "specified",
+      "status": "queued",
       "complexity": "standard",
       "depends_on": [],
       "revisions": 0
