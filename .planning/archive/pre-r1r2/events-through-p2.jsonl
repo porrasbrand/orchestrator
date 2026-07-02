@@ -80,5 +80,3 @@
 {"ts":"2026-04-04T15:52:50Z","event":"phase_response","data":{"phase":"03-worker-load-balancing","task_id":"1775317629250"}}
 {"ts":"2026-04-04T15:52:50Z","event":"smoke_test_pass","data":{"phase":"03-worker-load-balancing","tests_passed":5,"tests_total":5}}
 {"ts":"2026-04-04T15:52:50Z","event":"phase_complete","data":{"phase":"03-worker-load-balancing","commit":"eefe68e"}}
-{"ts":"2026-07-02T13:58:25Z","event":"project_init","data":{"project":"orchestrator-r1r2","phases":6,"worker":"hetzner"}}
-{"ts":"2026-07-02T13:58:25Z","event":"phase_specified","data":{"phase":"r1-01-dispatch-ledger","spec_check":"PASS"}}

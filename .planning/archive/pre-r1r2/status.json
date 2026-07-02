@@ -1,0 +1,19 @@
+{
+  "project": "orchestrator-sprint7",
+  "created": "2026-04-15",
+  "updated": "2026-04-15",
+  "status": "in-progress",
+  "current_phase": "01-verify-error-clarity",
+  "checkpoint_frequency": 2,
+  "phases_since_checkpoint": 0,
+  "target_worker": "hetzner",
+  "phases": {
+    "01-verify-error-clarity": { "status": "specified", "complexity": "standard", "depends_on": [], "revisions": 0 },
+    "02-notification-hooks": { "status": "specified", "complexity": "standard", "depends_on": [], "revisions": 0 },
+    "03-auto-rollback": { "status": "pending", "complexity": "complex", "depends_on": ["01-verify-error-clarity"], "revisions": 0 }
+  },
+  "execution_order": ["01-verify-error-clarity", "02-notification-hooks", "03-auto-rollback"],
+  "blocked": false,
+  "blocked_reason": null,
+  "metrics": { "phases_complete": 0, "phases_total": 3, "total_revisions": 0, "total_smoke_tests": 0, "started_at": "2026-04-15T07:15:00Z" }
+}

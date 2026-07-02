@@ -1,19 +1,75 @@
 {
-  "project": "orchestrator-sprint7",
-  "created": "2026-04-15",
-  "updated": "2026-04-15",
+  "project": "orchestrator-r1r2",
+  "created": "2026-07-02",
+  "updated": "2026-07-02",
   "status": "in-progress",
-  "current_phase": "01-verify-error-clarity",
-  "checkpoint_frequency": 2,
+  "current_phase": "r1-01-dispatch-ledger",
+  "checkpoint_frequency": 3,
   "phases_since_checkpoint": 0,
   "target_worker": "hetzner",
   "phases": {
-    "01-verify-error-clarity": { "status": "specified", "complexity": "standard", "depends_on": [], "revisions": 0 },
-    "02-notification-hooks": { "status": "specified", "complexity": "standard", "depends_on": [], "revisions": 0 },
-    "03-auto-rollback": { "status": "pending", "complexity": "complex", "depends_on": ["01-verify-error-clarity"], "revisions": 0 }
+    "r1-01-dispatch-ledger": {
+      "status": "specified",
+      "complexity": "standard",
+      "depends_on": [],
+      "revisions": 0
+    },
+    "r1-02-pm-iterate": {
+      "status": "pending",
+      "complexity": "complex",
+      "depends_on": [
+        "r1-01-dispatch-ledger"
+      ],
+      "revisions": 0
+    },
+    "r1-03-pm-daemon": {
+      "status": "pending",
+      "complexity": "complex",
+      "depends_on": [
+        "r1-02-pm-iterate"
+      ],
+      "revisions": 0
+    },
+    "r2-04-slack-notify": {
+      "status": "pending",
+      "complexity": "standard",
+      "depends_on": [],
+      "revisions": 0
+    },
+    "r2-05-slack-resolutions": {
+      "status": "pending",
+      "complexity": "complex",
+      "depends_on": [
+        "r1-03-pm-daemon",
+        "r2-04-slack-notify"
+      ],
+      "revisions": 0
+    },
+    "r1r2-06-integration-docs": {
+      "status": "pending",
+      "complexity": "standard",
+      "depends_on": [
+        "r1-03-pm-daemon",
+        "r2-05-slack-resolutions"
+      ],
+      "revisions": 0
+    }
   },
-  "execution_order": ["01-verify-error-clarity", "02-notification-hooks", "03-auto-rollback"],
+  "execution_order": [
+    "r1-01-dispatch-ledger",
+    "r1-02-pm-iterate",
+    "r1-03-pm-daemon",
+    "r2-04-slack-notify",
+    "r2-05-slack-resolutions",
+    "r1r2-06-integration-docs"
+  ],
   "blocked": false,
   "blocked_reason": null,
-  "metrics": { "phases_complete": 0, "phases_total": 3, "total_revisions": 0, "total_smoke_tests": 0, "started_at": "2026-04-15T07:15:00Z" }
+  "metrics": {
+    "phases_complete": 0,
+    "phases_total": 6,
+    "total_revisions": 0,
+    "total_smoke_tests": 0,
+    "started_at": "2026-07-02T00:00:00Z"
+  }
 }
