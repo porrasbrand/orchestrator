@@ -113,3 +113,8 @@
 {"ts":"2026-07-02T15:42:56Z","event":"pm_iteration","data":{"trigger":"tick","runner":"pm-iterate"}}
 {"ts":"2026-07-02T15:47:09Z","event":"phase_specified","data":{"phase":"r1r2-06-integration-docs","spec_check":"PASS"}}
 {"ts":"2026-07-02T15:47:11Z","event":"phase_queued","data":{"phase":"r1r2-06-integration-docs","task_id":"1783007229085612","worker":"hetzner"}}
+{"ts":"2026-07-02T16:01:27Z","event":"phase_response","data":{"phase":"r1r2-06-integration-docs","task_id":"1783007229085612"}}
+{"ts":"2026-07-02T16:01:27Z","event":"smoke_test_pass","data":{"phase":"r1r2-06-integration-docs","passed":49,"failed":0,"ran_on":["hetzner","lipo-360"],"detail":"27 integration + 22 wrapper"}}
+{"ts":"2026-07-02T16:01:27Z","event":"phase_complete","data":{"phase":"r1r2-06-integration-docs","commit":"ed27431","revisions":0}}
+{"ts":"2026-07-02T16:01:27Z","event":"learning_added","data":{"finding":"F1: pm-daemon numEnv rejects PM_GRACE_PERIOD=0 (v>0); minor, r3 candidate"}}
+{"ts":"2026-07-02T16:01:27Z","event":"project_complete","data":{"project":"orchestrator-r1r2","phases":6,"revisions":0,"tests":145}}

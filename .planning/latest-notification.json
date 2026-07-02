@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-04-15T07:21:36Z",
-  "event": "verification_failed",
-  "phase": "test-fail",
-  "detail": "3 of 8 failed",
+  "timestamp": "2026-07-02T16:01:27Z",
+  "event": "project_complete",
+  "phase": "",
+  "detail": "6 phases, 0 revisions, 145 tests. R1+R2 shipped.",
   "project": "orchestrator"
 }
