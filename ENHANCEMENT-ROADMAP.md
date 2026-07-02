@@ -283,3 +283,22 @@ Master roadmap from the strategic review still stands. In recommended order:
 - **P4** — Brief auto-generation (one-line goal → clarifying Q&A → `brief.md`; unlocks the autonomous front-end)
 - **P5** — Deploy + monitor modules (new `deploy` phase type; `monitor-prod.js` service; closes the build→ship→learn→fix loop)
 - **P6** — Self-improvement loop (mine `learnings.jsonl` + `events.jsonl` across N projects; auto-update `spec.md` template and `check-spec.sh` rules; orchestrator orchestrates its own improvements)
+
+---
+
+# R1+R2 — Resident PM: Event-Driven Daemon + Slack Escalations (Shipped 2026-07-02)
+
+**Project:** orchestrator-r1r2 · 6 phases · 0 revisions · 145 hermetic tests · dogfooded (phases r2-04→06 were specced + dispatched by the resident PM itself).
+
+## What it does
+The orchestration loop no longer needs an attended session. A pm2 daemon on the controller (`services/pm-daemon.js`) claims ledger-matched worker responses after a grace period (interactive sessions always win the race) and spawns bounded headless PM iterations (`scripts/pm-iterate.sh`: allowedTools whitelist, flock, 6/hr cap, escalation + checkpoint gates). Dispatches go through `scripts/queue-phase.sh` → `~/.orchestrator/dispatch-ledger.jsonl`. Notifications thread to Slack per project (`config/notify-hook.sh`); replies (`continue`/`retry`/`abort`/`override: <text>`) are polled back into the loop as resolutions (`scripts/slack-poll-resolutions.sh`).
+
+**Docs:** CLAUDE.md "Resident PM" section + `docs/RESIDENT-PM-RUNBOOK.md`.
+
+## Open items
+- F1 (minor): `numEnv()` rejects `PM_GRACE_PERIOD=0` (uses `v>0`) — r3 hardening candidate.
+- Production shakedown pending: revision cycle + ai-diagnose + live Slack round-trip + laptop-closed claim (fault-injection project planned).
+- Slack channel `#orchestrator` (breakthrough3x) + `SLACK_CHANNEL` in `~/.orchestrator/slack.env` — manual setup.
+
+## Remaining master roadmap
+P1 (live observability/interrupt UI) · P3 (portfolio orchestration) · P4 (brief auto-generation) · P5 (deploy+monitor) · P6 (self-improvement loop) — see sections above.
