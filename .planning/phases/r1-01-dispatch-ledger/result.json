@@ -1,0 +1,28 @@
+{
+  "status": "complete",
+  "files_modified": [
+    "scripts/register-project.sh",
+    "scripts/queue-phase.sh",
+    "templates/test-fixtures/mock-add-task.sh",
+    ".planning/phases/r1-01-dispatch-ledger/smoke-tests.sh",
+    ".planning/phases/r1-01-dispatch-ledger/result.md",
+    ".planning/phases/r1-01-dispatch-ledger/result.json"
+  ],
+  "tests_run": [
+    "T1: register + get round-trip",
+    "T2: idempotent re-add (still exactly 1 entry)",
+    "T3a: ledger line valid",
+    "T3b: events.jsonl phase_queued event",
+    "T4: ledger task_id matches dispatcher-printed ID",
+    "T5a: queue-phase exited non-zero on dispatcher exit=1",
+    "T5b: ledger unchanged on dispatcher exit=1",
+    "T6a: queue-phase exited non-zero on local-fallback",
+    "T6b: ledger unchanged on local-fallback",
+    "T7: deactivate flips active=false",
+    "T8: --worker wsl2 routes to add-task-local.sh"
+  ],
+  "tests_passed": 11,
+  "tests_failed": 0,
+  "blockers": [],
+  "summary": "Foundation ledger + registry scripts built and green. 11/11 hermetic smoke tests pass; re-running the suite is idempotent. task_id stored as JSON string. Fail-fast on dispatcher exit!=0 OR 'Task saved locally' fallback OR missing 'Task queued' line — ledger left untouched in all failure paths. No existing scripts modified."
+}
