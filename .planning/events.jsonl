@@ -88,3 +88,7 @@
 {"ts":"2026-07-02T14:33:08Z","event":"phase_complete","data":{"phase":"r1-01-dispatch-ledger","commit":"7c9f4f0","revisions":0}}
 {"ts":"2026-07-02T14:34:27Z","event":"phase_specified","data":{"phase":"r1-02-pm-iterate","spec_check":"PASS"}}
 {"ts":"2026-07-02T14:34:48Z","event":"phase_queued","data":{"phase":"r1-02-pm-iterate","task_id":"1783002878560981","worker":"hetzner"}}
+{"ts":"2026-07-02T14:44:00Z","event":"phase_response","data":{"phase":"r1-02-pm-iterate","task_id":"1783002878560981"}}
+{"ts":"2026-07-02T14:44:00Z","event":"smoke_test_pass","data":{"phase":"r1-02-pm-iterate","passed":16,"failed":0,"ran_on":["hetzner","lipo-360"],"extra":"real dry-run prompt inspected on lipo"}}
+{"ts":"2026-07-02T14:44:00Z","event":"phase_complete","data":{"phase":"r1-02-pm-iterate","commit":"93831ed","revisions":0}}
+{"ts":"2026-07-02T14:45:13Z","event":"phase_specified","data":{"phase":"r1-03-pm-daemon","spec_check":"PASS"}}
