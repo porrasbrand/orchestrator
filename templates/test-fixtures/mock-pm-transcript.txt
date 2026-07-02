@@ -1,0 +1,10 @@
+# Mock PM iteration transcript (hermetic test fixture)
+
+[pm-iterate mock] Reading status.json for project=demo
+[pm-iterate mock] Trigger: tick
+[pm-iterate mock] Current phase per status.json: 01-x
+[pm-iterate mock] Single state transition: spec-and-queue next phase would go here.
+[pm-iterate mock] Would call: scripts/queue-phase.sh <project> <next-phase> "<task text>"
+[pm-iterate mock] Would update .planning/status.json and events.jsonl.
+[pm-iterate mock] Would commit .planning/ with prefix [demo-orchestrator] and push.
+[pm-iterate mock] EXITING after ONE iteration.

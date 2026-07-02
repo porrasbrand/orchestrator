@@ -1,0 +1,32 @@
+{
+  "status": "complete",
+  "files_modified": [
+    "scripts/pm-iterate.sh",
+    "templates/test-fixtures/mock-pm-transcript.txt",
+    ".planning/phases/r1-02-pm-iterate/smoke-tests.sh",
+    ".planning/phases/r1-02-pm-iterate/result.md",
+    ".planning/phases/r1-02-pm-iterate/result.json"
+  ],
+  "tests_run": [
+    "T1: SKIP: paused; no transcript, no ledger",
+    "T2: SKIP: interrupted; no ledger",
+    "T3a: RAN: exit=0",
+    "T3b: iterations.jsonl line valid",
+    "T3c: transcript == mock content",
+    "T4a: prompt contains response-file JSON marker",
+    "T4b: prompt contains ONE-iter rule + queue-phase-only rule + name/trigger",
+    "T5a: 3rd call rate-capped after 2 iterations",
+    "T5b: old line does not count toward hourly cap",
+    "T6: SKIP: locked while another holder",
+    "T7a: tick blocked by escalation",
+    "T7b: --trigger resolution bypasses escalation",
+    "T7c: escalation_resolved unblocks tick",
+    "T8a: PM_ITERATE_MOCK_EXIT=7 propagates rc=7",
+    "T8b: ledger records exit_code:7",
+    "T8c: --dry-run prints DRYRUN, no ledger append"
+  ],
+  "tests_passed": 16,
+  "tests_failed": 0,
+  "blockers": [],
+  "summary": "Headless PM runner shipped with all 5 guardrails (pause, interrupt, non-blocking flock, hourly cap, escalation gate) in the specified order. 16/16 hermetic smoke tests pass; re-run identical. Never invokes real claude in tests (PM_ITERATE_MOCK always set). Exit codes propagate from mock/timeout. --dry-run writes prompt but no transcript/ledger. Fixed a bash-printf gotcha (leading '-' treated as option; rewrote via printf '%s\\n')."
+}
