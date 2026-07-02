@@ -23,7 +23,7 @@
       "revisions": 0
     },
     "r1-03-pm-daemon": {
-      "status": "specified",
+      "status": "queued",
       "complexity": "complex",
       "depends_on": [
         "r1-02-pm-iterate"
