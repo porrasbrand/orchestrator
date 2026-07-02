@@ -46,7 +46,7 @@
       "revisions": 0
     },
     "r1r2-06-integration-docs": {
-      "status": "pending",
+      "status": "queued",
       "complexity": "standard",
       "depends_on": [
         "r1-03-pm-daemon",
