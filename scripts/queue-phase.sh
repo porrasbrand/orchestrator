@@ -16,6 +16,11 @@ source "$SCRIPT_DIR/lib-host.sh"
 STATE_DIR="${ORCH_STATE_DIR:-$HOME/.orchestrator}"
 LEDGER="$STATE_DIR/dispatch-ledger.jsonl"
 REGISTRY="$STATE_DIR/active-projects.json"
+# Track whether the caller EXPLICITLY set SUPER_AGENT_DIR. Hermetic tests inject
+# a mock super-agent dir this way to intercept dispatch; when it's explicitly set
+# we honor that path (add-task.sh) even on the resident host. Production resident
+# dispatch leaves it unset → the local dispatcher is used.
+SA_DIR_EXPLICIT=0; [[ -n "${SUPER_AGENT_DIR:-}" ]] && SA_DIR_EXPLICIT=1
 SUPER_AGENT_DIR="${SUPER_AGENT_DIR:-$HOME/awesome/super-agent}"
 
 usage() {
@@ -85,7 +90,7 @@ fi
 # queue.db, so route to the local dispatcher. lipo keeps the SSH add-task.sh.
 case "$WORKER" in
     hetzner)
-        if orch_is_hetzner; then
+        if orch_is_hetzner && [[ "$SA_DIR_EXPLICIT" -eq 0 ]]; then
             DISPATCH="$SCRIPT_DIR/dispatch-local-hetzner.sh"
         else
             DISPATCH="$SUPER_AGENT_DIR/scripts/add-task.sh"

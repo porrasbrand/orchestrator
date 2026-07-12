@@ -4,6 +4,54 @@ Operator playbook for deploying, monitoring, and troubleshooting the daemon-driv
 orchestration loop (R1: dispatch ledger + pm-iterate + pm-daemon; R2: Slack outbound +
 inbound resolutions). Assumes bash / jq / node ≥ 18 / pm2 / curl on the controller.
 
+## RESIDENT HOST = hetzner (orch-migration Phase 1+2)
+
+As of the orch-hetzner-migration, the resident PM runs on the **hetzner box**
+(`ubuntu-32gb-nbg1-1`, `$HOME=/home/ubuntu`), co-located with the DEV workers.
+There is no SSH hop: dispatch, response-read, and verification are all local
+(auto-detected via `scripts/lib-host.sh` → `orch_is_hetzner`).
+
+> ⚠️ **The lipo-360 pm-daemon is RETIRED. Never run `pm-daemon` on lipo again.**
+> Two daemons scanning one dispatch-ledger reintroduce the claim race that the
+> file-move convention exists to prevent. lipo may still run the *interactive*
+> PM for backward compat, but the DAEMON is hetzner-only.
+
+**Resident processes (pm2):**
+
+| pm2 name                | script                              | role |
+|-------------------------|-------------------------------------|------|
+| `orch-response-watcher` | `services/orch-response-watcher.mjs`| polls queue.db; injects `check response <id>` into tmux `orchestrator`; **materializes** the daemon shim file |
+| `pm-daemon`             | `scripts/run-pm-daemon.sh`          | started with `SUPER_AGENT_DIR=~/.orchestrator/superagent-shim`; claims un-archived shim responses after grace and runs `pm-iterate` |
+
+**Response shim layout** (mirrors lipo's super-agent tasks dir, so `pm-daemon`
+runs unmodified):
+
+```
+~/.orchestrator/superagent-shim/tasks/responses/{new,claimed,archive,failed}/
+```
+
+For every ledger-matched task that reaches a terminal status, the watcher writes
+`new/<id>.json` = `{id, task, response, fetchedAt}` (lipo response-fetcher shape).
+Idempotent: skipped if `<id>.json` already exists in any of the four dirs.
+
+**Claim convention (interactive PM vs daemon — how the race is resolved):**
+When the interactive PM (tmux `orchestrator`) finishes a `check response <id>`
+(verify + `.planning/` updated), it MUST
+`mv new/<id>.json archive/<id>.json`. Open sessions win the race; the daemon
+only claims files still in `new/` after `PM_GRACE_PERIOD` (600s). See CLAUDE.md
+"CLAIM CONVENTION" for the exact command.
+
+**Start the resident stack:**
+
+```bash
+# watcher (dispatch loop + materializer)
+pm2 start services/orch-response-watcher.mjs --name orch-response-watcher
+# daemon (fallback claimer) — point it at the shim
+SUPER_AGENT_DIR=~/.orchestrator/superagent-shim \
+  pm2 start scripts/run-pm-daemon.sh --name pm-daemon
+pm2 save
+```
+
 ## Deploy
 
 1. **Register each orchestrated project** with the daemon.

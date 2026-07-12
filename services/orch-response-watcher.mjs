@@ -45,6 +45,44 @@ function withinBootGrace() {
 
 fs.mkdirSync(STATE_DIR, { recursive: true });
 
+// --- Response materializer (orch-migration-02) ---
+// For every ledger-matched terminal task we ALSO drop a response file into a
+// local shim that mirrors lipo's super-agent layout, so the resident pm-daemon
+// (which scans $SUPER_AGENT_DIR/tasks/responses/new/) has a file to claim if the
+// interactive PM doesn't archive it within PM_GRACE_PERIOD. File shape matches
+// lipo's response-fetcher exactly: {id, task, response, fetchedAt}.
+const SHIM_ROOT = process.env.ORCH_SA_SHIM || path.join(STATE_DIR, 'superagent-shim');
+const SHIM_RESP = path.join(SHIM_ROOT, 'tasks', 'responses');
+const SHIM_DIRS = {
+  new: path.join(SHIM_RESP, 'new'),
+  claimed: path.join(SHIM_RESP, 'claimed'),
+  archive: path.join(SHIM_RESP, 'archive'),
+  failed: path.join(SHIM_RESP, 'failed'),
+};
+for (const d of Object.values(SHIM_DIRS)) fs.mkdirSync(d, { recursive: true });
+
+// Idempotent: skip if <id>.json already exists in ANY of the four dirs (i.e. it
+// was already materialized, claimed by the daemon, archived by the PM, or failed).
+function shimExists(id) {
+  const name = `${id}.json`;
+  return Object.values(SHIM_DIRS).some(d => fs.existsSync(path.join(d, name)));
+}
+function materializeShim(id, row) {
+  if (shimExists(id)) return false;
+  const payload = {
+    id: Number(id),
+    task: String(row.task ?? row.query ?? ''),
+    response: String(row.response ?? ''),
+    fetchedAt: new Date().toISOString(),
+  };
+  const target = path.join(SHIM_DIRS.new, `${id}.json`);
+  const tmp = `${target}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2));
+  fs.renameSync(tmp, target);       // atomic publish into new/
+  console.log(`[watcher] materialized shim response new/${id}.json`);
+  return true;
+}
+
 // Persisted set of already-notified task ids (survives restarts).
 const notified = new Set();
 function loadNotified() {
@@ -102,9 +140,13 @@ async function tick() {
   if (ids.length === 0) return;
   let pending = [];
   for (const id of ids) {
-    if (notified.has(id)) continue;               // already done
     const row = findRow(id);
     if (!row || !TERMINAL.has(row.status)) continue; // not complete yet
+    // Materialize the daemon shim for EVERY terminal ledger task, independent of
+    // tmux injection / boot-grace — the daemon is the fallback when the PM is
+    // down, so the file must exist even if we can't nudge the session.
+    materializeShim(id, row);
+    if (notified.has(id)) continue;               // already nudged the tmux PM
     pending.push(id);
   }
   if (pending.length === 0) return;

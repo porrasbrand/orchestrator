@@ -61,6 +61,34 @@ dispatched finishes. Treat it as: run `scripts/get-response.sh <id>`, read the
 worker's response, then verify the phase (`scripts/verify.sh hetzner …`) and
 decide next step. It is a wake-up nudge from the messaging system, not a user.
 
+### CLAIM CONVENTION — archive the shim file when done (resident host)
+
+The response watcher ALSO materializes a shim file for every finished task at:
+
+```
+~/.orchestrator/superagent-shim/tasks/responses/new/<id>.json
+```
+
+This is the SAME file the resident `pm-daemon` scans. The daemon is a safety net:
+if this interactive session is asleep/busy and a response sits in `new/` past
+`PM_GRACE_PERIOD` (default 600s), the daemon claims it and runs the iteration
+headlessly. To avoid double-processing, **open sessions win the race**:
+
+> After you have FULLY processed a `check response <id>` (verified the phase and
+> updated `.planning/` state), you MUST move the shim file out of `new/`:
+>
+> ```bash
+> mv ~/.orchestrator/superagent-shim/tasks/responses/new/<id>.json \
+>    ~/.orchestrator/superagent-shim/tasks/responses/archive/<id>.json
+> ```
+>
+> That `mv` is the signal that stops the daemon from claiming it. Do it promptly
+> (well within the grace period). If the file is already gone from `new/`, the
+> daemon already claimed it — do not fight it; just confirm state and move on.
+
+This is identical to the lipo-360 semantics (interactive PM archives handled
+responses; the daemon only claims what's still in `new/` after the grace period).
+
 ---
 
 ## How to Start
