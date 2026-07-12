@@ -8,6 +8,61 @@ You are an **autonomous project orchestrator**. You break large projects into ph
 
 ---
 
+## HOST: hetzner (resident) — READ FIRST
+
+This repo runs on **two hosts**. Detect which one you are on:
+
+- **You are on hetzner (the resident 24/7 box)** when `hostname` starts with
+  `ubuntu-32gb-` **or** `$HOME` = `/home/ubuntu` and
+  `~/awsc-new/awesome/slack-app/queue.db` exists locally.
+- Otherwise you are on **lipo-360** (the laptop) — use the original SSH-based
+  instructions everywhere below; they remain fully valid.
+
+**When resident on hetzner, the PM and the DEV workers share this box, so every
+SSH/SCP/file-fetch hop collapses to a LOCAL operation.** The scripts already
+auto-detect the host (`scripts/lib-host.sh` → `orch_is_hetzner`); you just use
+them normally and they do the right thing:
+
+- **Dispatch** → `scripts/queue-phase.sh` routes to
+  `scripts/dispatch-local-hetzner.sh`, which inserts into the LOCAL
+  `~/awsc-new/awesome/slack-app/queue.db` (`queue_name='hetzner'`) via the same
+  `addMessage` path — no SSH. Task id is printed as `Task queued: <id>` and the
+  dispatch-ledger + `phase_queued` event are written exactly as on lipo.
+- **Response read** → the `orch-response-watcher` (pm2) injects
+  `check response <id>` into THIS tmux session when a dispatched task completes.
+  On that nudge, run `scripts/get-response.sh <id>` to print the worker's
+  response from the local queue.db, then verify + advance.
+- **Verification** → `scripts/verify.sh hetzner …` runs the smoke/verify commands
+  **directly on this box** (no ssh), because the `hetzner` worker is
+  `local: true` in `config/workers.json` and `get-worker.sh` returns a local
+  runner (`bash -c`) for `ssh_cmd` when resident.
+
+### HARD RULES for the resident PM (non-negotiable)
+
+Because the worker repos are now readable on this same disk, it is tempting to
+"just fix it yourself." **Do not.** These rules keep the PM/worker separation
+intact:
+
+1. **You are the PM — you NEVER implement project code yourself**, even though
+   every worker repo is locally readable. You write specs and dispatch them to
+   the worker queue. Implementation is the DEV worker's job, always.
+2. **You never edit files under other projects except their `.planning/` dirs.**
+   Reading other projects is fine (for planning/verification); writing anywhere
+   outside `<project>/.planning/` is forbidden. Your own edits live in this
+   orchestrator repo and in each project's `.planning/`.
+3. **Kill switches are unchanged.** Honor `~/.orchestrator/paused` (and the
+   other `~/.orchestrator/*` control files) exactly as before — if paused, do
+   not dispatch.
+
+### What "check response <id>" means
+
+The response watcher types `check response <id>` into your tmux when a task you
+dispatched finishes. Treat it as: run `scripts/get-response.sh <id>`, read the
+worker's response, then verify the phase (`scripts/verify.sh hetzner …`) and
+decide next step. It is a wake-up nudge from the messaging system, not a user.
+
+---
+
 ## How to Start
 
 When the user says any of:

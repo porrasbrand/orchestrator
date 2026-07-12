@@ -9,6 +9,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/../config/workers.json"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/lib-host.sh"
 
 WORKER="${1:?Usage: get-worker.sh <worker-name> <field>}"
 FIELD="${2:?Missing field (host, port, user, ssh_key, base_path, capabilities, status, ssh_cmd, scp_cmd)}"
@@ -23,6 +25,19 @@ WORKER_EXISTS=$(jq -r --arg w "$WORKER" '.workers | has($w)' "$CONFIG_FILE")
 if [ "$WORKER_EXISTS" != "true" ]; then
   echo "❌ Error: Worker '$WORKER' not found in registry" >&2
   exit 1
+fi
+
+# Resident-host short-circuit: if this worker is local:true AND we are running ON
+# that host, there is no SSH hop. ssh_cmd/scp_cmd become LOCAL runners so callers
+# (verify.sh etc.) that do `$SSH_CMD "<cmd string>"` execute directly.
+#   ssh_cmd → `bash -c`   (so `bash -c "<cmd>"` runs locally; ~ and base_path expand)
+#   scp_cmd → `cp`        (local file copy; same-host so no host: prefix needed)
+WORKER_LOCAL=$(jq -r --arg w "$WORKER" '.workers[$w].local // false' "$CONFIG_FILE")
+if [ "$WORKER_LOCAL" = "true" ] && orch_is_hetzner; then
+  case "$FIELD" in
+    ssh_cmd) echo "bash -c"; exit 0 ;;
+    scp_cmd) echo "cp"; exit 0 ;;
+  esac
 fi
 
 # Special computed fields

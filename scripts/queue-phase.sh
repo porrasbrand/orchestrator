@@ -11,6 +11,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/lib-host.sh"
 STATE_DIR="${ORCH_STATE_DIR:-$HOME/.orchestrator}"
 LEDGER="$STATE_DIR/dispatch-ledger.jsonl"
 REGISTRY="$STATE_DIR/active-projects.json"
@@ -79,8 +81,16 @@ if [[ "$WORKER" != "hetzner" && "$WORKER" != "wsl2" ]]; then
 fi
 
 # --- Resolve dispatch script ---
+# Resident (hetzner) PM: no SSH — the hetzner worker queue is the LOCAL
+# queue.db, so route to the local dispatcher. lipo keeps the SSH add-task.sh.
 case "$WORKER" in
-    hetzner) DISPATCH="$SUPER_AGENT_DIR/scripts/add-task.sh" ;;
+    hetzner)
+        if orch_is_hetzner; then
+            DISPATCH="$SCRIPT_DIR/dispatch-local-hetzner.sh"
+        else
+            DISPATCH="$SUPER_AGENT_DIR/scripts/add-task.sh"
+        fi
+        ;;
     wsl2)    DISPATCH="$SUPER_AGENT_DIR/scripts/add-task-local.sh" ;;
 esac
 if [[ ! -x "$DISPATCH" ]]; then
