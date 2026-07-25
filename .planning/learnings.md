@@ -17,3 +17,9 @@ Discoveries made during execution that inform future phases.
   `claims[taskId]`. Fix: `moveFile()` tolerates a missing source (existsSync + ENOENT
   try/catch); the success path clears `claims[taskId]` before the archive move; the
   claimed-loop body is wrapped in try/catch. Proven by `scripts/test-sf14.sh`.
+
+## Phase 01: COMPLETE (PM-verified) — SF-15 + SF-14 fixed
+- SF-15 (HIGH) RESOLVED: queue-phase.sh resident fallback to dispatch-local-hetzner.sh when injected SUPER_AGENT_DIR lacks scripts/add-task.sh; hermetic injection preserved. pm-daemon.js unchanged for SF-15 (worker justified: integration-test-pm S1 relies on the daemon passing SUPER_AGENT_DIR to the child). Commit b8abf35.
+- SF-14 (MED) RESOLVED: pm-daemon.js moveFile guarded (existsSync + ENOENT try/catch), claim cleared regardless of move, claimed-loop body wrapped in try/catch so one file can't abandon the cycle. Commit b8abf35.
+- PM independent verification: smoke contract ALL PASS (both hermetic tests + integration-test-pm 27/0 + integration-test 40/9 + test-numenv + node --check + daemon online + learnings). verify.sh exit 0. Daemon post-restart: online, no stack traces, grace=600s.
+- A headless daemon-spawned PM can now BOTH verify AND spec/queue — laptop-closed autonomy is no longer half-broken (closes the S4 caveat from the shakedown).

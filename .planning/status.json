@@ -2,21 +2,22 @@
   "project": "orch-daemon-fixes",
   "created": "2026-07-25",
   "updated": "2026-07-25",
-  "status": "in_progress",
-  "current_phase": "01-daemon-headless-autonomy",
+  "status": "complete",
+  "current_phase": null,
   "checkpoint_frequency": "never",
   "phases_since_checkpoint": 0,
   "target_worker": "hetzner",
   "phases": {
     "01-daemon-headless-autonomy": {
-      "status": "queued",
+      "status": "complete",
       "type": "complex",
       "revisions": 0,
       "fixes": [
         "SF-15",
         "SF-14"
       ],
-      "task_id": "1785005643306"
+      "task_id": "1785005643306",
+      "commit": "b8abf35"
     }
   },
   "execution_order": [
@@ -25,10 +26,15 @@
   "blocked": false,
   "blocked_reason": null,
   "metrics": {
-    "phases_complete": 0,
+    "phases_complete": 1,
     "phases_total": 1,
     "total_revisions": 0,
-    "total_smoke_tests": 0,
-    "started_at": "2026-07-25T18:45:00Z"
+    "total_smoke_tests": 11,
+    "started_at": "2026-07-25T18:45:00Z",
+    "completed_at": "2026-07-25T19:05:00Z",
+    "fixes_resolved": [
+      "SF-15",
+      "SF-14"
+    ]
   }
 }
