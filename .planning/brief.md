@@ -1,73 +1,75 @@
-# Project Brief: orchestrator-r1r2 — Resident PM (Event-Driven Daemon + Slack Escalations)
+# Project Brief: pm-daemon Headless-Autonomy Fixes (SF-15 + SF-14)
 
-**Created:** 2026-07-02
-**Requested by:** Manuel
-**Project path:** /home/mp/awesome/orchestrator (repo shared lipo-360 ↔ hetzner via GitHub)
+> **Origin:** `orch-shakedown-fault` findings (SHAKEDOWN-REPORT.md, 2026-07-25).
+> **Approved by:** Manuel, 2026-07-25.
+> **Suggested project name:** `orch-daemon-fixes`
 
-## 1. Goal
+## What
 
-Close the orchestration loop without a human-attended session. Today every orchestrated
-project freezes when the interactive Claude session on lipo-360 is closed: responses sit
-unread in `tasks/responses/new/`, verification never runs, next phases never queue.
+Fix the two open daemon-side defects the shakedown left behind, both in the
+orchestrator repo (self-dogfood, same pattern as r1r2):
 
-**R1 — Resident PM daemon:** a pm2 service on lipo-360 that detects worker responses
-belonging to orchestrated projects and spawns a headless `claude -p` invocation that runs
-exactly ONE orchestration-loop iteration (verify → advance/revise → queue → exit).
+**SF-15 (HIGH) — `SUPER_AGENT_DIR` overload breaks headless spec/queue.**
+`pm-daemon` runs with `SUPER_AGENT_DIR` pointed at its response-shim dir and passes
+`env: process.env` to pm-iterate (`services/pm-daemon.js:128`). `queue-phase.sh`
+reads `SUPER_AGENT_DIR` as a hermetic-test injection and routes dispatch to
+`$SUPER_AGENT_DIR/scripts/add-task.sh` (absent) → hard fail (shakedown EJ:80). Net
+effect: a daemon-spawned headless PM can VERIFY but cannot SPEC/QUEUE the next
+phase — laptop-closed autonomy is half-broken. Shakedown workaround was
+`env -u SUPER_AGENT_DIR`. Candidate fixes (worker/PM to choose + justify): separate
+the two env vars, scrub the child env in pm-daemon, or a local-dispatcher fallback
+in queue-phase.sh. The fix must preserve the hermetic-test injection mechanism the
+suites rely on.
 
-**R2 — Slack escalations:** orchestrator notifications (checkpoint, escalation, phase
-failed, project complete) post to a Slack channel; human replies ("continue", "abort",
-"override: ...") are polled and fed back into the loop as resolutions.
+**SF-14 (MEDIUM) — daemon scan cycle aborts on ENOENT shim rename.**
+`pm-daemon.js` `moveFile:141` ← `scanCycle:210`: an unconditional
+`renameSync claimed/… → archive/` throws `ENOENT` when the interactive PM already
+archived the shim; the exception escapes `scanCycle`, abandoning the remainder of
+the cycle for a full poll interval and leaking `claims[taskId]` (evidenced:
+pm-daemon log 18:19:31.734Z stack trace, EJ:79). Fix per report suggestion:
+`existsSync`/try-catch guard in `moveFile`; clear `claims[taskId]` before the move.
+Consider whether other `moveFile` call sites share the hazard.
 
-## 2. Success Criteria
+## Why
 
-- A phase response arriving while NO interactive session is open gets verified and the
-  next phase queued automatically within ~grace-period + 5 min, with full transcript logged.
-- A response handled by an open interactive session is NOT double-processed by the daemon.
-- Escalations (`ai_escalation_recommended`, `phase_failed`, checkpoint) reach Slack; a
-  threaded "continue" reply resumes the loop without touching the laptop.
-- Kill switch (`~/.orchestrator/paused`) and per-project `interrupt.json` are honored.
-- Hermetic integration tests cover the chain with $0 API cost (mock claude, mock Slack,
-  mock add-task).
+S4 proved the grace-claim machinery works — and simultaneously proved that the
+headless PM it hands control to cannot advance the project (SF-15) and that normal
+interactive/daemon coexistence can knock out a scan cycle (SF-14). These are the
+last blockers to trusting laptop-closed operation.
 
-## 3. Boundaries / Constraints
+## Where
 
-- All new code lives in the orchestrator repo (portable, configurable paths). Nothing is
-  hardcoded to lipo-360 paths — super-agent dir, responses dir, state dir all via env/config
-  with sensible defaults.
-- Do NOT modify `/home/mp/awesome/super-agent` scripts or services (add-task.sh,
-  local-response-watcher.js are consumed as-is; watcher pings interactive sessions first,
-  daemon claims only after a grace period).
-- Daemon runtime state lives in `~/.orchestrator/` (ledger, registry, locks, slack state) —
-  NOT in the git repo.
-- Headless claude runs use an allowedTools whitelist (Bash, Read, Write, Edit, Glob, Grep),
-  bounded turns, per-project flock, and a per-project hourly iteration cap. Never
-  `--dangerously-skip-permissions`.
-- The daemon NEVER overrides orchestrator escalation rules: an unresolved
-  `ai_escalation_recommended` still halts auto-revision; the daemon's job there is only to
-  notify Slack and wait for a resolution.
-- Slack: reuse the existing "B3X CC Experts" app bot token (lives on hetzner expert-bridge);
-  channel `#orchestrator` in breakthrough3x.slack.com. Token/channel provided at deploy
-  time via `~/.orchestrator/slack.env` — code must no-op gracefully when absent.
-- wsl2 is hands-off (colleague using it) — all phases dispatch to >>hetzner.
+- Repo: `~/awsc-new/awesome/orchestrator` on hetzner (self-target, like r1r2).
+- Prior `.planning/` is from the completed r1r2 project — archive per your
+  convention before init.
+- Target worker: `hetzner` only (wsl2 remains hands-off).
 
-## 4. Deliverables
+## Boundaries
 
-- `scripts/register-project.sh`, `scripts/queue-phase.sh` (dispatch ledger)
-- `scripts/pm-iterate.sh` (single headless PM iteration w/ guardrails)
-- `services/pm-daemon.js` + run wrapper (pm2 on lipo-360)
-- `config/notify-hook.sh` Slack implementation + `scripts/slack-poll-resolutions.sh`
-- `scripts/integration-test-pm.sh` (hermetic chain tests)
-- Docs: CLAUDE.md "Resident PM" section + deployment runbook
+- Scope is SF-15 + SF-14 ONLY. SF-11 (strict reply grammar), SF-12 (gate desync),
+  SF-13 (shim re-delivery) and all other shakedown findings are explicitly OUT of
+  scope — separate briefs later.
+- Do not disturb active registered projects.
+- `services/pm-daemon.js` is deployed live → any phase touching it must include
+  `pm2 restart pm-daemon --update-env` in its deploy steps (established learning),
+  and must not leave the daemon stopped.
+- No destructive ops; kill-switches honored as always.
 
-## 5. Verification Method
+## Success Criteria
 
-Executable smoke tests per phase (hermetic, mock-based, runnable on hetzner without
-lipo-side services). Final live validation happens on lipo-360 at deploy time (PM-run).
+- [ ] SF-15: with the daemon's real runtime env, a daemon-spawned pm-iterate can spec AND queue (hermetic test proving dispatch resolves to the real add-task path, not `$SUPER_AGENT_DIR/scripts/add-task.sh`); hermetic-test injection still works for the suites.
+- [ ] SF-14: hermetic test — pre-archived shim during a scan cycle → no exception escapes, cycle completes, `claims[taskId]` cleared.
+- [ ] Full existing regression suites still green (r1r2 baseline: 145+ tests).
+- [ ] pm-daemon restarted cleanly, `pm2 list` online, no error in first minutes of logs.
+- [ ] Findings SF-15/SF-14 marked resolved in the orchestrator's learnings with commit refs.
 
-## 6. Checkpoint Frequency
+## Access & Credentials
 
-3 (checkpoint after phase 03 and at completion).
+All local on hetzner. No external services needed.
 
-## 7. Revision Budget
+## Preferences
 
-Standard phases: 3. Complex phases: 5.
+- Small: 1–2 phases (one per finding, or one combined + tests). Max 3.
+- Checkpoint frequency: none needed — notify at completion (this is a
+  well-bounded bugfix project; escalate only on 2-attempt failure per doctrine).
+- Testing: required, hermetic (mock-SSH pattern), matching existing suites.

@@ -1,66 +1,65 @@
-# Level-0 Plan: orchestrator-r1r2 — Resident PM
+# orch-daemon-fixes — Level-0 Plan
 
-**Created:** 2026-07-02 · **Worker:** hetzner (wsl2 hands-off) · **Repo:** github.com/porrasbrand/orchestrator
+> Self-dogfood on `~/awsc-new/awesome/orchestrator` (same pattern as r1r2). Fix the
+> two open daemon-side defects from the `orch-shakedown-fault` shakedown:
+> **SF-15** (HIGH) and **SF-14** (MEDIUM). Scope is STRICTLY these two — SF-11/12/13
+> and all other findings are OUT (brief Boundaries). Brief: `.planning/brief.md`
+> (immutable). Prior r1r2 planning archived to `.planning/archive/r1r2/`.
 
-## Architecture Overview
+## Target
 
-```
-tasks/responses/new/<id>.json  (written by response-fetcher, lipo-360)
-        │
-        ├── local-response-watcher → tmux ping (interactive session, unchanged)
-        │        └─ session handles it → file moved to archive/ → daemon no-op
-        │
-        └── pm-daemon.js (pm2, lipo-360)
-             │  file still in new/ after GRACE_PERIOD and task_id ∈ dispatch-ledger?
-             ▼
-        pm-iterate.sh <project> --response-file <path>
-             │  flock + hourly cap + interrupt/paused checks
-             ▼
-        claude -p (headless, allowedTools whitelist, bounded turns)
-             │  ONE loop iteration: verify → advance/revise → queue-phase.sh → exit
-             ▼
-        queue-phase.sh → add-task.sh → ledger entry (task_id → project/phase)
-             │
-        notify.sh → config/notify-hook.sh → Slack #orchestrator (threaded per project)
-             │
-        slack-poll-resolutions.sh (daemon tick) → .planning/resolutions.jsonl → pm-iterate
-```
-
-State in `~/.orchestrator/`: `active-projects.json`, `dispatch-ledger.jsonl`, `locks/`,
-`slack.env`, `slack-threads.json`, `paused` (kill switch).
+- Repo: `/home/ubuntu/awsc-new/awesome/orchestrator` (self-target; on the worker
+  it resolves via `REMOTE_BASE/basename` = `~/awsc-new/awesome/orchestrator` — no
+  symlink needed, it is already under `awesome/`).
+- Worker: `hetzner` only. Commit prefix `[orch-daemon-fixes-NN]`; PM state
+  `[orch-daemon-fixes-orchestrator]`. Local repo, no push.
+- **Live-daemon caution:** `services/pm-daemon.js` is deployed live (pm2
+  `pm-daemon`). Any phase touching it MUST end with `pm2 restart pm-daemon
+  --update-env` and must not leave the daemon stopped (brief Boundaries).
 
 ## Phases
 
-| # | Phase | Complexity | Depends on | Deliverable |
-|---|-------|-----------|------------|-------------|
-| r1-01-dispatch-ledger | Project registry + dispatch ledger | standard | — | register-project.sh, queue-phase.sh, ledger schema |
-| r1-02-pm-iterate | Headless single-iteration runner | complex | r1-01 | pm-iterate.sh (flock, caps, allowedTools, transcript logs, PM_ITERATE_MOCK) |
-| r1-03-pm-daemon | Watcher daemon + tick | complex | r1-02 | services/pm-daemon.js, run-pm-daemon.sh, grace-period claim, paused/interrupt |
-| r2-04-slack-notify | Slack notify hook | standard | — | config/notify-hook.sh (chat.postMessage, per-project threads, SLACK_MOCK) |
-| r2-05-slack-resolutions | Reply polling → resolutions | complex | r1-03, r2-04 | slack-poll-resolutions.sh, resolutions.jsonl, daemon-tick wiring, thread ACKs |
-| r1r2-06-integration-docs | Hermetic chain tests + docs | standard | r1-03, r2-05 | integration-test-pm.sh (5 scenarios), CLAUDE.md Resident PM section, runbook |
+| # | Dir | Fixes | Type | Deploy |
+|---|-----|-------|------|--------|
+| 01 | `01-daemon-headless-autonomy` | **SF-15** + **SF-14** | complex | `pm2 restart pm-daemon --update-env` |
 
-**Execution order:** r1-01 → r1-02 → r1-03 → r2-04 → r2-05 → r1r2-06
-(r2-04 is DAG-independent but same repo ⇒ serialized by per-repo lock anyway.)
+**One combined phase** (brief allows "one combined + tests"): both defects are
+daemon-headless-autonomy bugs, share the regression suite, and need a single
+atomic daemon restart. If verification fails on one fix, the revision targets that
+specific failure.
 
-## Key Design Decisions (Level-0)
+## Fix approaches (PM-chosen, worker to implement + justify in result.md)
 
-1. **Grace-period claim, not watcher modification.** The interactive flow stays primary:
-   watcher pings tmux immediately; a handled response is archived. The daemon only claims
-   responses still sitting in `new/` after GRACE_PERIOD (default 600s) whose task_id is in
-   the dispatch ledger. Zero changes to super-agent, zero race with open sessions.
-2. **Ledger written at dispatch time.** `queue-phase.sh` wraps `add-task.sh`, parses the
-   printed `ID: <task_id>`, appends `{ts, task_id, project, project_path, phase, worker}`
-   to `~/.orchestrator/dispatch-ledger.jsonl`, and emits `phase_queued` (with task_id) to
-   the project's events.jsonl. Non-orchestrated tasks never enter the ledger ⇒ daemon
-   ignores them by construction.
-3. **One iteration per invocation.** `pm-iterate.sh` never loops. The daemon provides the
-   cadence; the headless claude does exactly one state transition and exits. Bounded blast
-   radius, bounded cost, resumable by design (state is `.planning/`).
-4. **Safety stack:** allowedTools whitelist · per-project flock · hourly iteration cap
-   (default 6) · `~/.orchestrator/paused` global kill switch · `.planning/interrupt.json`
-   per project · escalation rules unchanged (daemon notifies + waits, never auto-revises
-   past an unresolved escalation).
-5. **Everything mockable:** `PM_ITERATE_MOCK` (canned claude transcript), `SLACK_MOCK`
-   (write JSON to file), mock `add-task.sh` via PATH override — hermetic tests on hetzner,
-   $0, no lipo services needed.
+- **SF-15 — resident local-dispatcher fallback in `queue-phase.sh`** (primary).
+  When `orch_is_hetzner` AND the resolved `$SUPER_AGENT_DIR/scripts/add-task.sh`
+  does **not** exist, fall back to the local dispatcher even if `SA_DIR_EXPLICIT=1`.
+  Rationale: surgical (single file), and it changes behavior ONLY in the exact
+  failure case (injected `SUPER_AGENT_DIR` with no `add-task.sh` = the daemon's
+  operational env leaking in). Hermetic suites inject a **real mock** `add-task.sh`,
+  so their path is unaffected → injection preserved. No pm-daemon restart needed
+  for THIS fix (queue-phase.sh is read fresh per dispatch). The worker MAY also
+  scrub `SUPER_AGENT_DIR` from the pm-iterate child env in `pm-daemon.js:133-135`
+  (defence-in-depth) if it justifies the change keeps all suites green.
+- **SF-14 — guard the archive rename + clear the claim first** in `pm-daemon.js`.
+  Make `moveFile` (`:145`) tolerate a missing source (existsSync/try-catch, no
+  throw on ENOENT); clear `s.claims[taskId]` BEFORE / regardless of the move; wrap
+  the per-file body in the claimed-loop (`:203`) in try-catch so one file's error
+  cannot abandon the rest of the cycle. Check the other `moveFile`/`renameSync`
+  call sites (`:148,:158`) for the same hazard.
+
+## Success criteria → phase mapping (from brief)
+
+- SF-15 hermetic test: daemon-runtime env → pm-iterate can spec AND queue (dispatch
+  resolves to the real local path, not `$SUPER_AGENT_DIR/scripts/add-task.sh`); mock
+  injection still routes to the mock. → P01
+- SF-14 hermetic test: pre-archived shim mid-scan → no exception escapes, cycle
+  completes, `claims[taskId]` cleared. → P01
+- Full existing regression green (r1r2 baseline 145+). → P01 smoke contract
+- pm-daemon restarted cleanly, `pm2 list` online, clean first-minutes logs. → P01 + PM close
+- SF-15/SF-14 marked resolved in learnings with commit refs. → P01 + PM close
+
+## Dependencies / cadence
+
+Single phase. No checkpoints (brief: notify at completion). Escalate only on
+2-attempt verification failure (doctrine). Daemon restart is the worker's deploy
+step; PM independently re-verifies `pm2` online + clean logs at close.
