@@ -2,3 +2,4 @@
 {"ts":"2026-07-25T18:53:46Z","event":"project_init","data":{"project":"orch-daemon-fixes","path":"/home/ubuntu/awsc-new/awesome/orchestrator","note":"self-dogfood; r1r2 archived to .planning/archive/r1r2"}}
 {"ts":"2026-07-25T18:53:46Z","event":"phase_specified","data":{"level":0,"phases":1,"execution_order":["01-daemon-headless-autonomy"]}}
 {"ts":"2026-07-25T18:53:46Z","event":"phase_specified","data":{"phase":"01-daemon-headless-autonomy","level":1,"fixes":["SF-15","SF-14"],"approach":"SF-15 queue-phase resident fallback; SF-14 guarded moveFile + claim-clear; hermetic tests + full regression + pm2 restart"}}
+{"ts":"2026-07-25T18:54:03Z","event":"phase_queued","data":{"phase":"01-daemon-headless-autonomy","task_id":"1785005643306","worker":"hetzner"}}
