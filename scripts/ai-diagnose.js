@@ -288,7 +288,7 @@ async function main() {
   }
 
   // ---- One-shot diagnose: invoke ai-consult (or use mock) ----
-  async function diagnoseOnce({ provider, model, slot }) {
+  async function diagnoseOnce({ provider, model, slot, soft }) {
     const mock = mockFor(slot);
     if (mock) return mock;
     try {
@@ -310,15 +310,22 @@ async function main() {
       if (model) opts.model = model;
       return await ai.reviewDocument(opts);
     } catch (e) {
-      fail(`ai-consult call failed (${provider}${model ? '/' + model : ''}): ${e.message}`, 1);
+      const msg = `ai-consult call failed (${provider}${model ? '/' + model : ''}): ${e.message}`;
+      if (soft) throw new Error(msg);   // SF-04: secondary failure degrades gracefully, does not process.exit
+      fail(msg, 1);
     }
   }
 
-  function parseDiagnose(r, slot) {
-    if (!r || typeof r.feedback !== 'string') fail(`ai-consult returned no feedback (${slot})`, 1);
+  function parseDiagnose(r, slot, soft) {
+    if (!r || typeof r.feedback !== 'string') {
+      const msg = `ai-consult returned no feedback (${slot})`;
+      if (soft) throw new Error(msg);   // SF-04
+      fail(msg, 1);
+    }
     let parsed;
     try { parsed = JSON.parse(r.feedback); }
     catch (e) {
+      if (soft) throw new Error(`${slot} returned non-JSON: ${e.message}`);   // SF-04: don't nuke the primary
       const num = nextDiagnosisNum(phaseDir);
       const rawPath = path.join(phaseDir, `ai-diagnosis-${num}.raw.txt`);
       fs.writeFileSync(rawPath, r.feedback, 'utf8');
@@ -354,41 +361,52 @@ async function main() {
   let bothLow = false;
   let secondaryR = null;
   if (augmented.confidence === 'low') {
-    console.log('ℹ️  Primary diagnosis low-confidence — consulting OpenAI gpt-5.2-pro for second opinion…');
-    secondaryR = await diagnoseOnce({ provider: 'openai', model: 'gpt-5.2-pro', slot: 'secondary' });
-    const secondaryParsed = parseDiagnose(secondaryR, 'secondary');
-    secondaryAugmented = augment(secondaryParsed, 'openai', 'gpt-5.2-pro', secondaryR.cost);
-    secondOpinionUsed = true;
+    console.log('ℹ️  Primary diagnosis low-confidence — consulting OpenAI gpt-5.2 for second opinion…');
+    // SF-04: a secondary call/parse failure must NOT nuke the already-valid primary.
+    // The secondary runs in soft mode (throws instead of process.exit); on any error we
+    // keep the primary, record second_opinion_error, leave secondOpinionUsed false, and
+    // fall through so the primary IS written and ai_diagnostic_run IS still emitted.
+    try {
+      secondaryR = await diagnoseOnce({ provider: 'openai', model: 'gpt-5.2', slot: 'secondary', soft: true });
+      const secondaryParsed = parseDiagnose(secondaryR, 'secondary', true);
+      secondaryAugmented = augment(secondaryParsed, 'openai', 'gpt-5.2', secondaryR.cost);
+      secondOpinionUsed = true;
 
-    const confidenceRank = (c) => ({ high: 2, medium: 1, low: 0 }[c] ?? -1);
-    if (confidenceRank(secondaryAugmented.confidence) > confidenceRank(augmented.confidence)) {
-      // Swap: secondary becomes primary; original primary becomes -secondary.
-      const rejected = augmented;
-      augmented = {
-        ...secondaryAugmented,
-        second_opinion_used: true,
-        primary_provider: 'gemini',
-        primary_confidence: rejected.confidence,
-      };
-      secondaryAugmented = rejected; // saved as -secondary.json
-    } else {
-      // Secondary did not improve. Tag primary with second_opinion_used metadata.
-      augmented = {
-        ...augmented,
-        second_opinion_used: true,
-        primary_provider: 'gemini',
-        primary_confidence: augmented.confidence,
-      };
-      if (secondaryAugmented.confidence === 'low') {
-        bothLow = true;
-        console.log('⚠️  Both providers low-confidence — escalating.');
-        if (!augmented.escalate_now) {
-          augmented.escalate_now = true;
-          augmented.escalation_reason = augmented.escalation_reason && augmented.escalation_reason.length
-            ? augmented.escalation_reason + ' · both providers low-confidence'
-            : 'both providers low-confidence';
+      const confidenceRank = (c) => ({ high: 2, medium: 1, low: 0 }[c] ?? -1);
+      if (confidenceRank(secondaryAugmented.confidence) > confidenceRank(augmented.confidence)) {
+        // Swap: secondary becomes primary; original primary becomes -secondary.
+        const rejected = augmented;
+        augmented = {
+          ...secondaryAugmented,
+          second_opinion_used: true,
+          primary_provider: 'gemini',
+          primary_confidence: rejected.confidence,
+        };
+        secondaryAugmented = rejected; // saved as -secondary.json
+      } else {
+        // Secondary did not improve. Tag primary with second_opinion_used metadata.
+        augmented = {
+          ...augmented,
+          second_opinion_used: true,
+          primary_provider: 'gemini',
+          primary_confidence: augmented.confidence,
+        };
+        if (secondaryAugmented.confidence === 'low') {
+          bothLow = true;
+          console.log('⚠️  Both providers low-confidence — escalating.');
+          if (!augmented.escalate_now) {
+            augmented.escalate_now = true;
+            augmented.escalation_reason = augmented.escalation_reason && augmented.escalation_reason.length
+              ? augmented.escalation_reason + ' · both providers low-confidence'
+              : 'both providers low-confidence';
+          }
         }
       }
+    } catch (e) {
+      // SF-04: non-fatal secondary failure — preserve the primary diagnosis.
+      console.warn('[ai-diagnose] second opinion failed (non-fatal), keeping primary diagnosis:', e.message);
+      augmented.second_opinion_error = e.message;   // telemetry only
+      // deliberately leave secondOpinionUsed=false and fall through to validate + write + event.
     }
   }
 
