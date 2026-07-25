@@ -602,7 +602,7 @@ revision — treat each override as consumed after one use.
 |---|---:|---|
 | `ORCH_STATE_DIR` | `$HOME/.orchestrator` | Root of the daemon's state (registry, ledger, iterations.jsonl, locks, runs/, threads, resolutions cursor). |
 | `SUPER_AGENT_DIR` | `$HOME/awesome/super-agent` | Where the daemon reads `tasks/responses/new|claimed|archive|failed/`. |
-| `PM_GRACE_PERIOD` | `600` s | A response must sit in `new/` at least this long before the daemon claims it. Must be > 0. |
+| `PM_GRACE_PERIOD` | `600` s | A response must sit in `new/` at least this long before the daemon claims it. 0 = claim immediately; invalid/negative values are ignored with a warning and fall back to the default. |
 | `PM_POLL_INTERVAL` | `60` s | Response-scan cycle cadence. |
 | `PM_TICK_INTERVAL` | `900` s | Project-tick cycle cadence. |
 | `PM_STALL_TIMEOUT` | `14400` s | A `queued` phase older than this triggers a stall-poke tick. |

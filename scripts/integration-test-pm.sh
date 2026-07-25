@@ -33,8 +33,10 @@ export SLACK_REPLIES_MOCK="$T/replies.json"
 export SLACK_THREADS_FILE="$ORCH_STATE_DIR/slack-threads.json"
 export RESOLUTIONS_STATE_FILE="$ORCH_STATE_DIR/slack-resolutions-state.json"
 export PM_ITERATE_MOCK="$T/mock-transcript.txt"
-# NOTE: pm-daemon.js numEnv() rejects 0 (accepts >0 only) — see result.md FINDING F1.
-# We use grace=1 + a short sleep in S1 to reach a fully-elapsed grace window.
+# NOTE: PM_GRACE_PERIOD=0 is now honored post-fix (F1 fixed in phase 05: numEnv()
+# takes a per-knob floor, min=0 for grace). This suite deliberately keeps grace=1 +
+# a short sleep in S1 to exercise a fully-elapsed grace window (a non-zero wait), not
+# because 0 is rejected.
 export PM_GRACE_PERIOD=1
 export PM_MAX_ATTEMPTS=2
 export PATH="$T/bin:$PATH"

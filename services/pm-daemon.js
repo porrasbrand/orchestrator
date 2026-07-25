@@ -35,7 +35,7 @@ const HOME = os.homedir();
 const REPO_DIR = path.resolve(__dirname, '..');
 const STATE_DIR = process.env.ORCH_STATE_DIR || path.join(HOME, '.orchestrator');
 const SUPER_AGENT_DIR = process.env.SUPER_AGENT_DIR || path.join(HOME, 'awesome', 'super-agent');
-const GRACE_PERIOD = numEnv('PM_GRACE_PERIOD', 600);
+const GRACE_PERIOD = numEnv('PM_GRACE_PERIOD', 600, 0);   // 0 is legal — claim as soon as the response appears
 const POLL_INTERVAL = numEnv('PM_POLL_INTERVAL', 60);
 const TICK_INTERVAL = numEnv('PM_TICK_INTERVAL', 900);
 const STALL_TIMEOUT = numEnv('PM_STALL_TIMEOUT', 14400);
@@ -55,9 +55,16 @@ const PAUSED_FILE = path.join(STATE_DIR, 'paused');
 const DAEMON_STATE_FILE = path.join(STATE_DIR, 'daemon-state.json');
 
 // ---- utils ----
-function numEnv(name, def) {
-    const v = Number(process.env[name]);
-    return Number.isFinite(v) && v > 0 ? v : def;
+function numEnv(name, def, min = 1) {
+    const raw = process.env[name];
+    if (raw === undefined || raw === '') return def;
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < min) {
+        console.warn(new Date().toISOString(), '[pm-daemon]',
+            `ignoring invalid ${name}=${JSON.stringify(raw)} (must be a number >= ${min}); using default ${def}`);
+        return def;
+    }
+    return v;
 }
 
 function log(...args) {
