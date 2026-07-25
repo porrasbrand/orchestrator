@@ -92,6 +92,14 @@ case "$WORKER" in
     hetzner)
         if orch_is_hetzner && [[ "$SA_DIR_EXPLICIT" -eq 0 ]]; then
             DISPATCH="$SCRIPT_DIR/dispatch-local-hetzner.sh"
+        elif orch_is_hetzner && [[ ! -e "$SUPER_AGENT_DIR/scripts/add-task.sh" ]]; then
+            # SF-15: a daemon-spawned headless pm-iterate inherits the daemon's
+            # operational SUPER_AGENT_DIR (its response-shim dir), which has no
+            # scripts/add-task.sh — so SA_DIR_EXPLICIT=1 but the injected path is a
+            # dead end. On the resident host, fall back to the local dispatcher so a
+            # laptop-closed PM can still spec/queue. When add-task.sh DOES exist
+            # (hermetic-test injection), the else branch below preserves that path.
+            DISPATCH="$SCRIPT_DIR/dispatch-local-hetzner.sh"
         else
             DISPATCH="$SUPER_AGENT_DIR/scripts/add-task.sh"
         fi

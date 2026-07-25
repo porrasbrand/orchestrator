@@ -143,9 +143,20 @@ function runPmIterate(projectPath, extraArgs) {
 }
 
 function moveFile(src, destDir) {
+    // SF-14: tolerate an already-moved/archived source. If the interactive PM
+    // archived a claimed shim before the daemon's scan reached it, an unguarded
+    // renameSync throws ENOENT, escapes scanCycle, abandons the rest of the cycle
+    // for a full poll interval, and leaks claims[taskId]. Treat a missing source
+    // as already-moved (no throw).
+    if (!fs.existsSync(src)) { log('moveFile: source already gone, treating as moved:', src); return null; }
     ensureDir(destDir);
     const dest = path.join(destDir, path.basename(src));
-    fs.renameSync(src, dest);
+    try {
+        fs.renameSync(src, dest);
+    } catch (e) {
+        if (e.code === 'ENOENT') { log('moveFile: source vanished mid-move (ENOENT), treating as moved:', src); return null; }
+        throw e;
+    }
     return dest;
 }
 
@@ -201,6 +212,9 @@ function scanCycle() {
     claimed = claimed.filter(n => n.endsWith('.json')).sort();
 
     for (const name of claimed) {
+      // SF-14: isolate per-file processing so one file's error (e.g. a vanished
+      // shim) is logged and the loop continues — never abandons the whole cycle.
+      try {
         const taskId = name.slice(0, -5);
         const row = ledger.get(taskId);
         if (!row) { log('skipping claimed file without ledger row:', name); continue; }
@@ -214,10 +228,12 @@ function scanCycle() {
         // Disposition
         const skipped = /^SKIP:/m.test(stdout);
         if (code === 0 && !skipped) {
-            moveFile(claimedPath, RESP_ARCHIVE);
+            // SF-14: clear the claim FIRST, so a missing/failed archive move can
+            // never leak claims[taskId]. moveFile now tolerates an absent source.
             const s = loadDaemonState();
             delete s.claims[taskId];
             saveDaemonState(s);
+            moveFile(claimedPath, RESP_ARCHIVE);
             log('archived:', taskId, '(exit 0)');
         } else if (code === 0 && skipped) {
             log('claim left in place (pm-iterate SKIP):', taskId);
@@ -250,6 +266,10 @@ function scanCycle() {
                 log('GAVE UP on', taskId, '→ failed/');
             }
         }
+      } catch (e) {
+        // SF-14: never let one claimed file abort the scan cycle.
+        log('claimed-file processing error (continuing):', name, e && e.stack || e);
+      }
     }
 }
 
