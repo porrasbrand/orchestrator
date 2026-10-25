@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# notify-hook.sh.example — Example notification hook for the orchestrator
+#
+# Copy this file to config/notify-hook.sh and make it executable:
+#   cp config/notify-hook.sh.example config/notify-hook.sh
+#   chmod +x config/notify-hook.sh
+#
+# This script receives the notification JSON on stdin. Parse it with jq
+# or any tool of your choice. Exit 0 on success; non-zero exits are
+# logged as warnings but do NOT block the orchestrator.
+#
+# --- JSON schema (stdin) ---
+# {
+#   "timestamp": "2026-04-15T07:30:00Z",
+#   "event": "phase_complete",          # phase_complete | phase_failed | verification_failed | regression_failed | project_complete
+#   "phase": "01-verify-error-clarity",
+#   "detail": "All 10 smoke tests passed. Commit: abc1234.",
+#   "project": "orchestrator-sprint7"
+# }
+
+# Read JSON from stdin
+JSON="$(cat)"
+
+EVENT="$(echo "$JSON" | jq -r '.event')"
+PHASE="$(echo "$JSON" | jq -r '.phase')"
+DETAIL="$(echo "$JSON" | jq -r '.detail')"
+PROJECT="$(echo "$JSON" | jq -r '.project')"
+TIMESTAMP="$(echo "$JSON" | jq -r '.timestamp')"
+
+# --- Example 1: Print to terminal ---
+echo "[${TIMESTAMP}] ${EVENT}: ${PHASE} — ${DETAIL}"
+
+# --- Example 2: Append to a log file ---
+# echo "[${TIMESTAMP}] ${EVENT}: ${PHASE} — ${DETAIL}" >> /tmp/orchestrator-notifications.log
+
+# --- Example 3: Slack webhook ---
+# SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T00000/B00000/XXXXXXXXXX"
+# curl -s -X POST "$SLACK_WEBHOOK_URL" \
+#   -H 'Content-Type: application/json' \
+#   -d "{\"text\": \"[${PROJECT}] ${EVENT}: ${PHASE} — ${DETAIL}\"}"
+
+# --- Example 4: Email via sendmail ---
+# echo "Subject: [${PROJECT}] ${EVENT}
+#
+# Phase: ${PHASE}
+# Detail: ${DETAIL}
+# Time: ${TIMESTAMP}" | sendmail you@example.com
+
+# --- Example 5: Desktop notification (Linux) ---
+# notify-send "Orchestrator: ${EVENT}" "${PHASE}: ${DETAIL}"
+
+# --- Example 6: Desktop notification (macOS) ---
+# osascript -e "display notification \"${DETAIL}\" with title \"Orchestrator: ${EVENT}\""

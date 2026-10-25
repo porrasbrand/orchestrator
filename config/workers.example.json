@@ -1,0 +1,22 @@
+{
+  "workers": {
+    "worker-1": {
+      "host": "worker-1.example.internal",
+      "port": 22,
+      "user": "deploy",
+      "ssh_key": "~/.ssh/id_worker_ed25519",
+      "base_path": "~/projects",
+      "capabilities": ["node", "python", "git", "jq"],
+      "status": "active"
+    },
+    "worker-2": {
+      "host": "worker-2.example.internal",
+      "port": 2200,
+      "user": "deploy",
+      "ssh_key": "~/.ssh/id_worker_ed25519",
+      "base_path": "~/projects",
+      "capabilities": ["node", "python", "git", "jq"],
+      "status": "active"
+    }
+  }
+}

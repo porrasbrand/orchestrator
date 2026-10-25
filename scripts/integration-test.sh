@@ -1,0 +1,1077 @@
+#!/usr/bin/env bash
+# integration-test.sh — End-to-end integration tests for verify → notify → rollback chain
+#
+# Tests the orchestrator scripts as a chain using a mock project environment.
+# Uses mock-ssh (PATH override) so no real SSH or network access is needed.
+#
+# Usage: integration-test.sh
+#
+# Scenarios:
+#   1. Verify passes → notification sent
+#   2. Verify fails → failure report + notification
+#   3. Regression failure → auto-rollback
+#   4. No merge → graceful no-op
+
+set -uo pipefail
+
+TEST_DIR="/tmp/orchestrator-integration-test"
+ORCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPTS_DIR="$ORCH_DIR/scripts"
+PASS_COUNT=0
+FAIL_COUNT=0
+SCENARIO_RESULTS=""
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+# ============================================================
+# Utility functions
+# ============================================================
+
+log_pass() {
+    PASS_COUNT=$((PASS_COUNT + 1))
+}
+
+log_fail() {
+    local msg="${1:-}"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    if [[ -n "$msg" ]]; then
+        echo "    FAIL: $msg" >&2
+    fi
+}
+
+assert_file_exists() {
+    local path="$1"
+    local label="${2:-$path}"
+    if [[ -f "$path" ]]; then
+        log_pass
+    else
+        log_fail "Expected file to exist: $label"
+    fi
+}
+
+assert_file_contains() {
+    local path="$1"
+    local pattern="$2"
+    local label="${3:-pattern '$pattern' in $path}"
+    if [[ -f "$path" ]] && grep -q "$pattern" "$path" 2>/dev/null; then
+        log_pass
+    else
+        log_fail "Expected $label"
+    fi
+}
+
+assert_json_field() {
+    local path="$1"
+    local query="$2"
+    local expected="$3"
+    local label="${4:-$query == $expected in $path}"
+    if [[ ! -f "$path" ]]; then
+        log_fail "JSON file not found: $path"
+        return
+    fi
+    local actual
+    actual=$(jq -r "$query" "$path" 2>/dev/null || echo "JQ_ERROR")
+    if [[ "$actual" == "$expected" ]]; then
+        log_pass
+    else
+        log_fail "$label (got: $actual)"
+    fi
+}
+
+assert_exit_code() {
+    local actual="$1"
+    local expected="$2"
+    local label="${3:-exit code}"
+    if [[ "$actual" -eq "$expected" ]]; then
+        log_pass
+    else
+        log_fail "Expected $label=$expected, got $actual"
+    fi
+}
+
+assert_output_contains() {
+    local output="$1"
+    local pattern="$2"
+    local label="${3:-output contains '$pattern'}"
+    if echo "$output" | grep -q "$pattern" 2>/dev/null; then
+        log_pass
+    else
+        log_fail "$label"
+    fi
+}
+
+# ============================================================
+# Setup: create mock project environment
+# ============================================================
+
+setup_mock_project() {
+    # Clean slate
+    rm -rf "$TEST_DIR"
+    mkdir -p "$TEST_DIR/bin"
+    mkdir -p "$TEST_DIR/project/.planning/phases/01-test-phase"
+    mkdir -p "$TEST_DIR/project/.planning"
+
+    # Initialize git repo in mock project
+    (
+        cd "$TEST_DIR/project"
+        git init -q
+        git config user.email "test@example.com"
+        git config user.name "Test"
+
+        # Create initial files
+        echo '{"phases":{}}' > .planning/status.json
+        echo "" > .planning/events.jsonl
+        echo "# Notifications" > .planning/notifications.md
+        echo "" > .planning/learnings.jsonl
+
+        # Create mock phase spec with smoke tests
+        cat > .planning/phases/01-test-phase/spec.md << 'SPECEOF'
+# Test Phase Spec
+
+## Expected Files Changed
+- `scripts/integration-test.sh` (create)
+
+## Smoke Tests
+```bash
+# 1. File exists and executable
+test -x scripts/integration-test.sh && echo EXECUTABLE
+```
+SPECEOF
+
+        # Create mock result files
+        echo "# Result" > .planning/phases/01-test-phase/result.md
+        cat > .planning/phases/01-test-phase/result.json << 'RJEOF'
+{
+  "status": "complete",
+  "phase": "01-test-phase",
+  "commit": "abc1234",
+  "files_modified": [],
+  "files_created": ["scripts/integration-test.sh"],
+  "tests_run": [{"name": "file exists", "passed": true}],
+  "blockers": [],
+  "summary": "Test phase complete"
+}
+RJEOF
+
+        git add -A
+        git commit -q -m "Initial commit"
+    )
+
+    # Create mock workers.json that points to a test worker using mock-ssh
+    mkdir -p "$TEST_DIR/config"
+    cat > "$TEST_DIR/config/workers.json" << 'WJEOF'
+{
+  "workers": {
+    "test-worker": {
+      "host": "localhost",
+      "port": 22,
+      "user": "test",
+      "ssh_key": "/dev/null",
+      "base_path": "/tmp/orchestrator-integration-test",
+      "capabilities": ["node", "git", "jq"],
+      "status": "active"
+    }
+  }
+}
+WJEOF
+}
+
+# Create mock-ssh that returns canned responses
+# The mode argument controls behavior: "pass", "fail"
+create_mock_ssh() {
+    local mode="${1:-pass}"
+
+    cat > "$TEST_DIR/bin/ssh" << SSHEOF
+#!/usr/bin/env bash
+# Mock SSH — logs calls and returns canned responses
+# Mode: $mode
+
+# Log the call
+echo "\$(date -u +%Y-%m-%dT%H:%M:%SZ) \$*" >> "$TEST_DIR/ssh-calls.log"
+
+# The command to execute is the last argument(s)
+CMD="\$*"
+
+# test -f for result.md
+if echo "\$CMD" | grep -q "test -f.*result.md"; then
+    echo "YES"
+    exit 0
+fi
+
+# test -f for result.json
+if echo "\$CMD" | grep -q "test -f.*result.json"; then
+    echo "YES"
+    exit 0
+fi
+
+# test -x for smoke-tests.sh
+if echo "\$CMD" | grep -q "test -x.*smoke-tests.sh"; then
+    echo "NO"
+    exit 0
+fi
+
+# cat result.json
+if echo "\$CMD" | grep -q "cat.*result.json"; then
+    cat << 'JSONEOF'
+{
+  "status": "complete",
+  "phase": "01-test-phase",
+  "commit": "abc1234",
+  "files_modified": [],
+  "files_created": ["scripts/integration-test.sh"],
+  "tests_run": [{"name": "file exists", "passed": true}],
+  "blockers": [],
+  "summary": "Test phase complete"
+}
+JSONEOF
+    exit 0
+fi
+
+# git diff --name-only
+if echo "\$CMD" | grep -q "git diff --name-only"; then
+    echo "scripts/integration-test.sh"
+    echo ".planning/phases/01-test-phase/result.md"
+    exit 0
+fi
+
+# smoke-tests.sh execution — depends on mode
+if echo "\$CMD" | grep -q "smoke-tests.sh"; then
+    if [[ "$mode" == "pass" ]]; then
+        echo "Test 1: file exists ... ✅"
+        echo "Test 2: runs correctly ... ✅"
+        exit 0
+    else
+        echo "Test 1: file exists ... ✅"
+        echo "Test 2: validation fails ... ❌"
+        exit 1
+    fi
+fi
+
+# git rev-parse --short HEAD
+if echo "\$CMD" | grep -q "rev-parse --short HEAD"; then
+    cd "$TEST_DIR/project" && git rev-parse --short HEAD
+    exit 0
+fi
+
+# git revert
+if echo "\$CMD" | grep -q "git revert"; then
+    cd "$TEST_DIR/project" && eval "\$(echo "\$CMD" | sed 's/.*cd [^ ]* && //')"
+    exit \$?
+fi
+
+# git log
+if echo "\$CMD" | grep -q "git log"; then
+    cd "$TEST_DIR/project" && eval "\$(echo "\$CMD" | sed 's/.*cd [^ ]* && //')"
+    exit \$?
+fi
+
+# Default: echo the command back
+echo "MOCK_SSH_DEFAULT: \$CMD"
+exit 0
+SSHEOF
+
+    chmod +x "$TEST_DIR/bin/ssh"
+}
+
+# Create a mock get-worker.sh override that uses our test config
+create_mock_get_worker() {
+    # We override get-worker.sh by creating a wrapper that uses our test config
+    cat > "$TEST_DIR/bin/get-worker-override.sh" << 'GWEOF'
+#!/usr/bin/env bash
+# Override get-worker.sh to use test config
+CONFIG_FILE="/tmp/orchestrator-integration-test/config/workers.json"
+WORKER="$1"
+FIELD="$2"
+
+if [[ "$FIELD" == "ssh_cmd" ]]; then
+    echo "ssh"
+    exit 0
+fi
+
+if [[ "$FIELD" == "base_path" ]]; then
+    jq -r --arg w "$WORKER" '.workers[$w].base_path // empty' "$CONFIG_FILE"
+    exit 0
+fi
+
+jq -r --arg w "$WORKER" --arg f "$FIELD" '.workers[$w][$f] // empty' "$CONFIG_FILE"
+GWEOF
+    chmod +x "$TEST_DIR/bin/get-worker-override.sh"
+}
+
+# ============================================================
+# Scenario 1: Verify passes → notification sent
+# ============================================================
+
+run_scenario_1() {
+    local sc_pass=0
+    local sc_fail=0
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+
+    setup_mock_project
+    create_mock_ssh "pass"
+    create_mock_get_worker
+
+    # Override get-worker.sh for this run
+    export MOCK_GET_WORKER="$TEST_DIR/bin/get-worker-override.sh"
+
+    # Prepend mock bin to PATH so 'ssh' resolves to mock-ssh
+    export PATH="$TEST_DIR/bin:$PATH"
+
+    # Patch get-worker.sh temporarily: copy scripts and replace get-worker.sh
+    local TEMP_SCRIPTS="$TEST_DIR/scripts"
+    cp -r "$SCRIPTS_DIR" "$TEMP_SCRIPTS"
+    cp "$TEST_DIR/bin/get-worker-override.sh" "$TEMP_SCRIPTS/get-worker.sh"
+
+    # Run verify.sh
+    local output=""
+    local exit_code=0
+    output=$(bash "$TEMP_SCRIPTS/verify.sh" test-worker "$TEST_DIR/project" .planning/phases/01-test-phase 2>&1) || exit_code=$?
+
+    # Assert: exit code 0
+    assert_exit_code "$exit_code" 0 "verify.sh exit code"
+
+    # Assert: verification-report.json exists
+    assert_file_exists "$TEST_DIR/project/.planning/phases/01-test-phase/verification-report.json" "verification-report.json"
+
+    # Assert: verified == true
+    assert_json_field "$TEST_DIR/project/.planning/phases/01-test-phase/verification-report.json" ".verified" "true" "verified == true"
+
+    # Run notify.sh phase_complete
+    local notify_output=""
+    notify_output=$(bash "$SCRIPTS_DIR/notify.sh" phase_complete "$TEST_DIR/project" --phase 01-test-phase --detail "All tests passed." 2>&1) || true
+
+    # Assert: notifications.md has entry
+    assert_file_contains "$TEST_DIR/project/.planning/notifications.md" "Phase Complete" "notifications.md has Phase Complete entry"
+
+    # Assert: latest-notification.json has event == phase_complete
+    assert_json_field "$TEST_DIR/project/.planning/latest-notification.json" ".event" "phase_complete" "event == phase_complete"
+
+    sc_pass=$((PASS_COUNT - old_pass))
+    sc_fail=$((FAIL_COUNT - old_fail))
+
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+        echo -e "Scenario 1: Verify pass → notify ... ${GREEN}✅ PASS${NC} ($sc_pass assertions)"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+        echo -e "Scenario 1: Verify pass → notify ... ${RED}❌ FAIL${NC} ($sc_fail failures)"
+    fi
+}
+
+# ============================================================
+# Scenario 2: Verify fails → failure report + notification
+# ============================================================
+
+run_scenario_2() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+
+    setup_mock_project
+    create_mock_ssh "fail"
+    create_mock_get_worker
+
+    export PATH="$TEST_DIR/bin:$PATH"
+
+    # Copy scripts and use mock get-worker
+    local TEMP_SCRIPTS="$TEST_DIR/scripts"
+    rm -rf "$TEMP_SCRIPTS"
+    cp -r "$SCRIPTS_DIR" "$TEMP_SCRIPTS"
+    cp "$TEST_DIR/bin/get-worker-override.sh" "$TEMP_SCRIPTS/get-worker.sh"
+
+    # Create a smoke-tests.sh on mock so verify uses script mode
+    # mock-ssh already handles this — returns "NO" for test -x smoke-tests.sh
+    # So verify.sh falls through to markdown smoke tests.
+    # But we need the markdown tests to also fail. Let's add a smoke test that fails.
+
+    # Update the spec to have tests that the mock will process
+    # The spec's markdown tests use ssh to run commands. The mock returns pass/fail based on mode.
+    # Actually, verify.sh in markdown mode uses ssh_retry which calls $SSH_CMD.
+    # The "→ expect" pattern doesn't seem to produce failures easily with our mock
+    # because the mock is mode "fail" but the markdown smoke tests use a different mechanism.
+
+    # Simpler approach: make mock-ssh return "YES" for test -x smoke-tests.sh
+    # and return failing smoke test output.
+    cat > "$TEST_DIR/bin/ssh" << 'SSHEOF2'
+#!/usr/bin/env bash
+# Mock SSH — fail mode
+CMD="$*"
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $CMD" >> /tmp/orchestrator-integration-test/ssh-calls.log
+
+if echo "$CMD" | grep -q "test -f.*result.md"; then echo "YES"; exit 0; fi
+if echo "$CMD" | grep -q "test -f.*result.json"; then echo "YES"; exit 0; fi
+if echo "$CMD" | grep -q "cat.*result.json"; then
+    cat << 'JSONEOF'
+{
+  "status": "complete",
+  "phase": "01-test-phase",
+  "commit": "abc1234",
+  "files_modified": [],
+  "files_created": ["scripts/integration-test.sh"],
+  "tests_run": [{"name": "file exists", "passed": true}],
+  "blockers": [],
+  "summary": "Test phase complete"
+}
+JSONEOF
+    exit 0
+fi
+
+if echo "$CMD" | grep -q "git diff --name-only"; then
+    echo "scripts/integration-test.sh"
+    echo ".planning/phases/01-test-phase/result.md"
+    exit 0
+fi
+
+if echo "$CMD" | grep -q "test -x.*smoke-tests.sh"; then echo "YES"; exit 0; fi
+
+if echo "$CMD" | grep -q "smoke-tests.sh"; then
+    echo "Test 1: file exists ... ✅"
+    echo "Test 2: validation check ... ❌"
+    echo "Test 3: format check ... ❌"
+    exit 1
+fi
+
+if echo "$CMD" | grep -q "rev-parse"; then
+    echo "abc1234"
+    exit 0
+fi
+
+echo "MOCK_SSH_DEFAULT: $CMD"
+exit 0
+SSHEOF2
+    chmod +x "$TEST_DIR/bin/ssh"
+
+    # Run verify.sh
+    local output=""
+    local exit_code=0
+    output=$(bash "$TEMP_SCRIPTS/verify.sh" test-worker "$TEST_DIR/project" .planning/phases/01-test-phase 2>&1) || exit_code=$?
+
+    # Assert: exit code 1
+    assert_exit_code "$exit_code" 1 "verify.sh exit code (should be 1 for failure)"
+
+    # Assert: verification-report.json has verified == false
+    assert_json_field "$TEST_DIR/project/.planning/phases/01-test-phase/verification-report.json" ".verified" "false" "verified == false"
+
+    # Assert: failures array is non-empty
+    local failures_len
+    failures_len=$(jq '.failures | length' "$TEST_DIR/project/.planning/phases/01-test-phase/verification-report.json" 2>/dev/null || echo "0")
+    if [[ "$failures_len" -gt 0 ]]; then
+        log_pass
+    else
+        log_fail "Expected non-empty failures array"
+    fi
+
+    # Assert: "Failure Summary" appears in stdout
+    assert_output_contains "$output" "Failure Summary" "stdout has 'Failure Summary'"
+
+    # Assert: "Suggested Revision Notes" appears in stdout
+    assert_output_contains "$output" "Suggested Revision Notes" "stdout has 'Suggested Revision Notes'"
+
+    # Run notify.sh verification_failed
+    bash "$SCRIPTS_DIR/notify.sh" verification_failed "$TEST_DIR/project" --phase 01-test-phase --detail "2 smoke tests failed." 2>&1 || true
+
+    # Assert: latest-notification.json has event == verification_failed
+    assert_json_field "$TEST_DIR/project/.planning/latest-notification.json" ".event" "verification_failed" "event == verification_failed"
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+        echo -e "Scenario 2: Verify fail → report  ... ${GREEN}✅ PASS${NC} ($sc_pass assertions)"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+        echo -e "Scenario 2: Verify fail → report  ... ${RED}❌ FAIL${NC} ($sc_fail failures)"
+    fi
+}
+
+# ============================================================
+# Scenario 3: Regression failure → auto-rollback
+# ============================================================
+
+run_scenario_3() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+
+    setup_mock_project
+
+    # Set up a more complete project for auto-rollback
+    (
+        cd "$TEST_DIR/project"
+
+        # Create status.json with a completed phase
+        cat > .planning/status.json << 'SJEOF'
+{
+  "phases": {
+    "01-test-phase": {
+      "status": "complete"
+    }
+  }
+}
+SJEOF
+
+        # Add a phase_merged event with a commit hash
+        git add -A
+        git commit -q -m "Setup for rollback test" --allow-empty
+
+        # Create a "merge" commit that we can revert
+        echo "merged content" > merged-file.txt
+        git add merged-file.txt
+        git commit -q -m "Merge phase/01-test-phase into main"
+        MERGE_HASH=$(git rev-parse HEAD)
+
+        # Write events.jsonl with the merge event
+        echo "{\"ts\":\"2026-04-08T10:00:00Z\",\"event\":\"phase_merged\",\"data\":{\"phase\":\"01-test-phase\",\"commit\":\"$MERGE_HASH\"}}" > .planning/events.jsonl
+
+        git add .planning/events.jsonl
+        git commit -q -m "Log merge event"
+    )
+
+    create_mock_get_worker
+
+    # Create mock-ssh for auto-rollback scenario
+    # auto-rollback calls regression-test.sh which runs locally (not via ssh for the test)
+    # But auto-rollback also calls get-worker.sh for SSH_CMD, and uses ssh_retry for git operations
+    # We need regression-test.sh to fail, and git revert to work
+
+    # Create a custom regression-test.sh that fails
+    local TEMP_SCRIPTS="$TEST_DIR/scripts"
+    rm -rf "$TEMP_SCRIPTS"
+    cp -r "$SCRIPTS_DIR" "$TEMP_SCRIPTS"
+    cp "$TEST_DIR/bin/get-worker-override.sh" "$TEMP_SCRIPTS/get-worker.sh"
+
+    # Override regression-test.sh to always fail
+    cat > "$TEMP_SCRIPTS/regression-test.sh" << 'RTEOF'
+#!/usr/bin/env bash
+echo "========================================"
+echo "Regression Test Suite"
+echo "========================================"
+echo ""
+echo "Phase 01-test-phase:"
+echo "  ❌ Test 1 failed"
+echo ""
+echo "========================================"
+echo "Total: 0/1 passed"
+echo "Result: 1 FAILED"
+exit 1
+RTEOF
+    chmod +x "$TEMP_SCRIPTS/regression-test.sh"
+
+    # Mock SSH that handles git operations on the local test project
+    cat > "$TEST_DIR/bin/ssh" << SSHEOF3
+#!/usr/bin/env bash
+CMD="\$*"
+echo "\$(date -u +%Y-%m-%dT%H:%M:%SZ) \$CMD" >> "$TEST_DIR/ssh-calls.log"
+
+PROJECT="$TEST_DIR/project"
+
+# git revert
+if echo "\$CMD" | grep -q "git revert"; then
+    cd "\$PROJECT"
+    # Extract the commit hash — it's after "git revert"
+    HASH=\$(echo "\$CMD" | grep -oE '[a-f0-9]{7,40}' | head -1)
+    if [[ -n "\$HASH" ]]; then
+        git revert --no-commit "\$HASH" 2>&1 && git commit -m "Auto-rollback: 01-test-phase broke regression tests" 2>&1
+        exit \$?
+    fi
+    exit 1
+fi
+
+# git rev-parse --short HEAD
+if echo "\$CMD" | grep -q "rev-parse --short HEAD"; then
+    cd "\$PROJECT" && git rev-parse --short HEAD
+    exit 0
+fi
+
+# git log
+if echo "\$CMD" | grep -q "git log"; then
+    cd "\$PROJECT"
+    # Just run the git log command
+    eval "\$(echo "\$CMD" | sed 's/.*cd [^ ]* && //')" 2>/dev/null || echo ""
+    exit 0
+fi
+
+echo "MOCK_SSH_DEFAULT: \$CMD"
+exit 0
+SSHEOF3
+    chmod +x "$TEST_DIR/bin/ssh"
+
+    export PATH="$TEST_DIR/bin:$PATH"
+
+    # Run auto-rollback.sh
+    local output=""
+    local exit_code=0
+    output=$(bash "$TEMP_SCRIPTS/auto-rollback.sh" test-worker "$TEST_DIR/project" 2>&1) || exit_code=$?
+
+    # Assert: exit code 1 (rollback happened)
+    assert_exit_code "$exit_code" 1 "auto-rollback.sh exit code (1 = rolled back)"
+
+    # Assert: git log shows a revert commit
+    local git_log
+    git_log=$(cd "$TEST_DIR/project" && git log --oneline -5 2>/dev/null)
+    if echo "$git_log" | grep -qi "rollback\|revert"; then
+        log_pass
+    else
+        log_fail "Expected git log to contain revert/rollback commit (got: $git_log)"
+    fi
+
+    # Assert: status.json has rolled_back status
+    assert_json_field "$TEST_DIR/project/.planning/status.json" '.phases["01-test-phase"].status' "rolled_back" "phase status == rolled_back"
+
+    # Assert: events.jsonl has phase_rolled_back event
+    if grep -q "phase_rolled_back" "$TEST_DIR/project/.planning/events.jsonl" 2>/dev/null; then
+        log_pass
+    else
+        log_fail "Expected events.jsonl to contain phase_rolled_back event"
+    fi
+
+    # Assert: notifications.md has regression_failed entry
+    assert_file_contains "$TEST_DIR/project/.planning/notifications.md" "Regression Failed" "notifications.md has Regression Failed entry"
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+        echo -e "Scenario 3: Regression → rollback ... ${GREEN}✅ PASS${NC} ($sc_pass assertions)"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+        echo -e "Scenario 3: Regression → rollback ... ${RED}❌ FAIL${NC} ($sc_fail failures)"
+    fi
+}
+
+# ============================================================
+# Scenario 4: Auto-rollback with no recent merge
+# ============================================================
+
+run_scenario_4() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+
+    setup_mock_project
+
+    # Ensure events.jsonl has NO phase_merged events
+    echo "" > "$TEST_DIR/project/.planning/events.jsonl"
+
+    # Create status.json (required by auto-rollback)
+    echo '{"phases":{}}' > "$TEST_DIR/project/.planning/status.json"
+
+    create_mock_get_worker
+
+    # Copy scripts
+    local TEMP_SCRIPTS="$TEST_DIR/scripts"
+    rm -rf "$TEMP_SCRIPTS"
+    cp -r "$SCRIPTS_DIR" "$TEMP_SCRIPTS"
+    cp "$TEST_DIR/bin/get-worker-override.sh" "$TEMP_SCRIPTS/get-worker.sh"
+    export PATH="$TEST_DIR/bin:$PATH"
+
+    # Record git HEAD before
+    local head_before
+    head_before=$(cd "$TEST_DIR/project" && git rev-parse HEAD)
+
+    # Run auto-rollback.sh
+    local output=""
+    local exit_code=0
+    output=$(bash "$TEMP_SCRIPTS/auto-rollback.sh" test-worker "$TEST_DIR/project" 2>&1) || exit_code=$?
+
+    # Assert: exits with 0 (nothing to rollback)
+    assert_exit_code "$exit_code" 0 "auto-rollback.sh exit code (0 = nothing to rollback)"
+
+    # Assert: output contains "nothing to rollback" message
+    assert_output_contains "$output" "nothing to rollback" "output mentions nothing to rollback"
+
+    # Assert: no git changes (HEAD unchanged)
+    local head_after
+    head_after=$(cd "$TEST_DIR/project" && git rev-parse HEAD)
+    if [[ "$head_before" == "$head_after" ]]; then
+        log_pass
+    else
+        log_fail "Expected no git changes but HEAD moved"
+    fi
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+        echo -e "Scenario 4: No merge → no-op     ... ${GREEN}✅ PASS${NC} ($sc_pass assertions)"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+        echo -e "Scenario 4: No merge → no-op     ... ${RED}❌ FAIL${NC} ($sc_fail failures)"
+    fi
+}
+
+# ============================================================
+# Cleanup
+# ============================================================
+
+cleanup() {
+    rm -rf "$TEST_DIR"
+}
+
+# ============================================================
+# Main
+# ============================================================
+
+echo "=== Orchestrator Integration Test Suite ==="
+echo ""
+
+# Save original PATH
+ORIGINAL_PATH="$PATH"
+
+run_scenario_1
+PATH="$ORIGINAL_PATH"
+
+run_scenario_2
+PATH="$ORIGINAL_PATH"
+
+run_scenario_3
+PATH="$ORIGINAL_PATH"
+
+run_scenario_4
+PATH="$ORIGINAL_PATH"
+
+# ============================================================
+# Scenario 5: verify → ai-diagnose chain with mocked Gemini
+# ============================================================
+# Exercises the P2 Phase B integration: a failing phase causes verify.sh to
+# invoke ai-diagnose.sh, which (with AI_DIAGNOSE_MOCK set) returns a canned
+# JSON response. Asserts:
+#   - ai-diagnose.sh exits 0 with the mock
+#   - ai-diagnosis-NN.json is produced in the phase-dir
+#   - the produced JSON contains the diagnosis/root_cause/confidence keys
+# No network access. Cost: $0.
+run_scenario_5() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 5: verify → ai-diagnose chain with mocked Gemini"
+    echo "=========================================="
+
+    local PHASE_DIR="$TEST_DIR/project/.planning/phases/02-ai-diagnose"
+    mkdir -p "$PHASE_DIR"
+
+    # Stage the test-fixture spec + verification report into the phase-dir.
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$PHASE_DIR/spec.md"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$PHASE_DIR/verification-report.json"
+
+    # Write a deterministic mock response that satisfies the diagnosis schema.
+    local MOCK_FILE="$TEST_DIR/ai-diagnose-mock.json"
+    cat > "$MOCK_FILE" << 'MOCKEOF'
+{
+  "feedback": "{\"diagnosis\":\"Mocked diagnosis for integration test — server missing app.listen call.\",\"root_cause\":\"missing_port_binding\",\"suggested_revisions\":[{\"section\":\"## Implementation Steps\",\"change\":\"Add app.listen(4080) at end of src/server.js.\"}],\"confidence\":\"high\",\"escalate_now\":false,\"escalation_reason\":\"\"}",
+  "usage": { "inputTokens": 1500, "outputTokens": 200, "totalTokens": 1700 },
+  "cost": { "inputTokens": 1500, "outputTokens": 200, "totalCost": 0.005, "currency": "USD" }
+}
+MOCKEOF
+
+    # Invoke ai-diagnose.sh directly with the mock (verify.sh's call would do
+    # exactly this; we test the primitive in isolation so a missing SSH/PATH
+    # doesn't muddy the assertion).
+    local AI_DIAG_RC=0
+    AI_DIAGNOSE_MOCK="$MOCK_FILE" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$PHASE_DIR" > "$TEST_DIR/ai-diag.out" 2>&1 || AI_DIAG_RC=$?
+    assert_exit_code "$AI_DIAG_RC" 0 "ai-diagnose.sh exit code (0 = ok with mock)"
+
+    # The diagnosis JSON should be written into the phase-dir.
+    local DIAG_FILE="$PHASE_DIR/ai-diagnosis-01.json"
+    if [[ -f "$DIAG_FILE" ]]; then
+        log_pass
+        echo "PASS: ai-diagnosis-01.json produced"
+    else
+        log_fail "ai-diagnosis-01.json NOT produced (path: $DIAG_FILE)"
+    fi
+
+    # The produced file should contain all required schema keys.
+    if [[ -f "$DIAG_FILE" ]] && grep -q '"diagnosis"' "$DIAG_FILE" \
+       && grep -q '"root_cause"' "$DIAG_FILE" \
+       && grep -q '"confidence"' "$DIAG_FILE" \
+       && grep -q '"escalate_now"' "$DIAG_FILE"; then
+        log_pass
+        echo "PASS: diagnosis JSON has required keys"
+    else
+        log_fail "diagnosis JSON missing required keys"
+    fi
+
+    # Echo a marker line so the smoke-test grep can detect this scenario ran.
+    echo "verify → ai-diagnose chain scenario completed"
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+    fi
+    echo "Scenario 5: $sc_pass passed, $sc_fail failed"
+}
+
+run_scenario_5
+PATH="$ORIGINAL_PATH"
+
+# ============================================================
+# Scenario 6: ai-stats reports expected counts
+# ============================================================
+# Builds on scenario 5: after ai-diagnose produced an ai-diagnosis-NN.json
+# (and via verify.sh would have appended ai_diagnostic_run), this scenario
+# manually appends the corresponding ai_diagnostic_used event (the same
+# event the PM emits per the CLAUDE.md autonomy rule) and asserts that
+# scripts/ai-stats.sh aggregates the stream correctly.
+run_scenario_6() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 6: ai-stats reports expected counts"
+    echo "=========================================="
+
+    # Use a hermetic project dir so we can assert clean counts (the main
+    # project's events.jsonl already has events from prior scenarios).
+    local AI_STATS_DIR="$TEST_DIR/ai-stats-project"
+    rm -rf "$AI_STATS_DIR"
+    mkdir -p "$AI_STATS_DIR/.planning"
+    cat > "$AI_STATS_DIR/.planning/events.jsonl" << 'AIEOF'
+{"ts":"2026-05-19T11:30:00Z","event":"ai_diagnostic_run","data":{"phase":"02-ai-diagnose","diagnosis_num":1,"confidence":"high","escalate_now":false,"cost":0.005}}
+{"ts":"2026-05-19T11:31:00Z","event":"ai_diagnostic_used","data":{"phase":"02-ai-diagnose","diagnosis_num":1,"revisions_applied":1,"confidence":"high"}}
+AIEOF
+
+    local AI_STATS_JSON
+    AI_STATS_JSON=$(bash "$SCRIPTS_DIR/ai-stats.sh" --project "$AI_STATS_DIR" --format json 2>/dev/null || echo '{}')
+
+    # Counts assertion: 1 run, 1 used, 100% adoption.
+    local RUN_N USED_N ADOPT
+    RUN_N=$(echo "$AI_STATS_JSON" | jq -r '.diagnostics_run')
+    USED_N=$(echo "$AI_STATS_JSON" | jq -r '.diagnostics_used')
+    ADOPT=$(echo "$AI_STATS_JSON" | jq -r '.adoption_rate')
+    if [[ "$RUN_N" == "1" ]]; then log_pass; echo "PASS: diagnostics_run == 1"; else log_fail "diagnostics_run != 1 (got $RUN_N)"; fi
+    if [[ "$USED_N" == "1" ]]; then log_pass; echo "PASS: diagnostics_used == 1"; else log_fail "diagnostics_used != 1 (got $USED_N)"; fi
+    if [[ "$ADOPT" == "100" ]]; then log_pass; echo "PASS: adoption_rate == 100%"; else log_fail "adoption_rate != 100 (got $ADOPT)"; fi
+
+    # Text format also surfaces the counts.
+    local AI_STATS_TEXT
+    AI_STATS_TEXT=$(bash "$SCRIPTS_DIR/ai-stats.sh" --project "$AI_STATS_DIR" 2>/dev/null)
+    if echo "$AI_STATS_TEXT" | grep -q "Diagnostics run:.*1"; then
+        log_pass; echo "PASS: text format renders count"
+    else
+        log_fail "text format missing diagnostics_run line"
+    fi
+
+    echo "ai-stats scenario completed"
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"
+    else
+        SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"
+    fi
+    echo "Scenario 6: $sc_pass passed, $sc_fail failed"
+}
+
+run_scenario_6
+PATH="$ORIGINAL_PATH"
+
+# ============================================================
+# Scenario 7: Escalation routing (P2-D)
+# ============================================================
+# Mocked Gemini returns escalate_now=true + confidence=high. ai-diagnose.sh
+# must (a) emit ai_escalation_recommended event, (b) invoke notify.sh which
+# writes to .planning/notifications.md + latest-notification.json.
+run_scenario_7() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 7: AI escalation routing (P2-D)"
+    echo "=========================================="
+
+    local DIR="$TEST_DIR/escalate-phase"
+    rm -rf "$DIR"
+    mkdir -p "$DIR/.planning"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$DIR/spec.md"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$DIR/verification-report.json"
+    echo "" > "$DIR/.planning/events.jsonl"
+
+    local MOCK="$TEST_DIR/mock-escalate.json"
+    cat > "$MOCK" << 'MOCKEOF'
+{
+  "feedback": "{\"diagnosis\":\"spec uses missing tool\",\"root_cause\":\"wrong assumption\",\"suggested_revisions\":[],\"confidence\":\"high\",\"escalate_now\":true,\"escalation_reason\":\"spec assumes nonexistent API\"}",
+  "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+  "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.001, "currency": "USD" }
+}
+MOCKEOF
+
+    local RC=0
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$DIR" > "$TEST_DIR/escalate.out" 2>&1 || RC=$?
+    assert_exit_code "$RC" 0 "ai-diagnose.sh exit code (0 even on escalation — supplementary)"
+
+    if grep -q "ESCALATION RECOMMENDED" "$TEST_DIR/escalate.out"; then log_pass; echo "PASS: stdout contains ESCALATION RECOMMENDED";
+    else log_fail "stdout missing ESCALATION RECOMMENDED"; fi
+
+    if grep -q "ai_escalation_recommended" "$DIR/.planning/events.jsonl"; then log_pass; echo "PASS: ai_escalation_recommended event logged";
+    else log_fail "event missing from events.jsonl"; fi
+
+    if [[ -f "$DIR/.planning/notifications.md" ]] && grep -q "AI escalation recommended" "$DIR/.planning/notifications.md"; then
+        log_pass; echo "PASS: notify.sh wrote escalation to notifications.md"
+    else log_fail "notifications.md missing escalation entry"; fi
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"; else SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"; fi
+    echo "Scenario 7: $sc_pass passed, $sc_fail failed"
+}
+
+# ============================================================
+# Scenario 8: Second-opinion fallback (P2-D)
+# ============================================================
+# Primary returns low-confidence; secondary returns high-confidence.
+# ai-diagnose.js must swap: primary file uses secondary's content, rejected
+# primary saved as -secondary, primary tagged with second_opinion_used + the
+# original provider/confidence.
+run_scenario_8() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 8: Second-opinion fallback (P2-D)"
+    echo "=========================================="
+
+    local DIR="$TEST_DIR/second-opinion-phase"
+    rm -rf "$DIR"
+    mkdir -p "$DIR/.planning"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$DIR/spec.md"
+    cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$DIR/verification-report.json"
+    echo "" > "$DIR/.planning/events.jsonl"
+
+    local MOCK="$TEST_DIR/mock-second.json"
+    cat > "$MOCK" << 'MOCKEOF'
+{
+  "primary": {
+    "feedback": "{\"diagnosis\":\"unclear from logs\",\"root_cause\":\"insufficient_evidence\",\"suggested_revisions\":[],\"confidence\":\"low\",\"escalate_now\":false}",
+    "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+    "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.001, "currency": "USD" }
+  },
+  "secondary": {
+    "feedback": "{\"diagnosis\":\"missing app.listen\",\"root_cause\":\"port not bound\",\"suggested_revisions\":[{\"section\":\"impl\",\"change\":\"add listen\"}],\"confidence\":\"high\",\"escalate_now\":false}",
+    "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+    "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.002, "currency": "USD" }
+  }
+}
+MOCKEOF
+
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$DIR" > "$TEST_DIR/second.out" 2>&1
+    if grep -q "second opinion" "$TEST_DIR/second.out"; then log_pass; echo "PASS: second opinion was consulted";
+    else log_fail "stdout missing second-opinion log line"; fi
+
+    if [[ -f "$DIR/ai-diagnosis-01.json" ]]; then log_pass; echo "PASS: primary diagnosis written"; else log_fail "primary file missing"; fi
+    if [[ -f "$DIR/ai-diagnosis-01-secondary.json" ]]; then log_pass; echo "PASS: rejected primary saved as -secondary"; else log_fail "-secondary file missing"; fi
+
+    # Primary should now reflect the secondary's content (swap).
+    if [[ -f "$DIR/ai-diagnosis-01.json" ]]; then
+        local SWAPPED_PROVIDER=$(jq -r '.provider' "$DIR/ai-diagnosis-01.json")
+        local PRIMARY_PROVIDER_TAG=$(jq -r '.primary_provider' "$DIR/ai-diagnosis-01.json")
+        local SECOND_OPINION_USED=$(jq -r '.second_opinion_used' "$DIR/ai-diagnosis-01.json")
+        if [[ "$SWAPPED_PROVIDER" == "openai" ]]; then log_pass; echo "PASS: primary file's provider=openai (swap occurred)"; else log_fail "expected provider=openai after swap, got $SWAPPED_PROVIDER"; fi
+        if [[ "$PRIMARY_PROVIDER_TAG" == "gemini" ]]; then log_pass; echo "PASS: primary_provider tag=gemini (original provider recorded)"; else log_fail "primary_provider tag != gemini ($PRIMARY_PROVIDER_TAG)"; fi
+        if [[ "$SECOND_OPINION_USED" == "true" ]]; then log_pass; echo "PASS: second_opinion_used=true"; else log_fail "second_opinion_used != true"; fi
+    fi
+
+    if grep -q "ai_second_opinion_consulted" "$DIR/.planning/events.jsonl"; then log_pass; echo "PASS: ai_second_opinion_consulted event logged"; else log_fail "event missing"; fi
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"; else SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"; fi
+    echo "Scenario 8: $sc_pass passed, $sc_fail failed"
+}
+
+# ============================================================
+# Scenario 9: A/B variant model name flows through (P2-D)
+# ============================================================
+run_scenario_9() {
+    local old_pass=$PASS_COUNT
+    local old_fail=$FAIL_COUNT
+    echo ""
+    echo "=========================================="
+    echo "Scenario 9: A/B variant — customtools model recorded (P2-D)"
+    echo "=========================================="
+
+    local DIR_A="$TEST_DIR/variant-base"
+    local DIR_B="$TEST_DIR/variant-customtools"
+    rm -rf "$DIR_A" "$DIR_B"
+    for D in "$DIR_A" "$DIR_B"; do
+        mkdir -p "$D/.planning"
+        cp "$ORCH_DIR/templates/test-fixtures/failed-phase/spec.md" "$D/spec.md"
+        cp "$ORCH_DIR/templates/test-fixtures/failed-phase/verification-report.json" "$D/verification-report.json"
+        echo "" > "$D/.planning/events.jsonl"
+    done
+
+    local MOCK="$TEST_DIR/mock-variant.json"
+    cat > "$MOCK" << 'MOCKEOF'
+{
+  "feedback": "{\"diagnosis\":\"x\",\"root_cause\":\"y\",\"suggested_revisions\":[],\"confidence\":\"medium\",\"escalate_now\":false}",
+  "usage": { "inputTokens": 100, "outputTokens": 50, "totalTokens": 150 },
+  "cost": { "inputTokens": 100, "outputTokens": 50, "totalCost": 0.001, "currency": "USD" }
+}
+MOCKEOF
+
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" "$DIR_A" > "$TEST_DIR/variant-base.out" 2>&1
+    AI_DIAGNOSE_MOCK="$MOCK" bash "$SCRIPTS_DIR/ai-diagnose.sh" --variant=customtools "$DIR_B" > "$TEST_DIR/variant-ct.out" 2>&1
+
+    local MODEL_A=$(jq -r '.model' "$DIR_A/ai-diagnosis-01.json" 2>/dev/null)
+    local MODEL_B=$(jq -r '.model' "$DIR_B/ai-diagnosis-01.json" 2>/dev/null)
+    if [[ "$MODEL_A" == "gemini-3.1-pro-preview" ]]; then log_pass; echo "PASS: base run records model=gemini-3.1-pro-preview"; else log_fail "base model: got $MODEL_A"; fi
+    if [[ "$MODEL_B" == "gemini-3.1-pro-preview-customtools" ]]; then log_pass; echo "PASS: --variant=customtools records model=gemini-3.1-pro-preview-customtools"; else log_fail "variant model: got $MODEL_B"; fi
+    if [[ "$MODEL_A" != "$MODEL_B" ]]; then log_pass; echo "PASS: model field differs between base and customtools"; else log_fail "model fields are identical — variant did not flow through"; fi
+
+    local sc_pass=$((PASS_COUNT - old_pass))
+    local sc_fail=$((FAIL_COUNT - old_fail))
+    if [[ $sc_fail -eq 0 ]]; then SCENARIO_RESULTS="${SCENARIO_RESULTS}pass"; else SCENARIO_RESULTS="${SCENARIO_RESULTS}fail"; fi
+    echo "Scenario 9: $sc_pass passed, $sc_fail failed"
+}
+
+run_scenario_7
+PATH="$ORIGINAL_PATH"
+run_scenario_8
+PATH="$ORIGINAL_PATH"
+run_scenario_9
+PATH="$ORIGINAL_PATH"
+
+echo ""
+TOTAL=$((PASS_COUNT + FAIL_COUNT))
+SCENARIOS_PASSED=0
+for r in $(echo "$SCENARIO_RESULTS" | grep -o .); do
+    if [[ "$r" == "p" ]]; then
+        SCENARIOS_PASSED=$((SCENARIOS_PASSED + 1))
+    fi
+done
+
+# Count scenarios passed by checking the result string
+SC_PASSED=0
+SC_TOTAL=9
+# Check each char pair in SCENARIO_RESULTS
+idx=0
+while [[ $idx -lt ${#SCENARIO_RESULTS} ]]; do
+    chunk="${SCENARIO_RESULTS:$idx:4}"
+    if [[ "$chunk" == "pass" ]]; then
+        SC_PASSED=$((SC_PASSED + 1))
+        idx=$((idx + 4))
+    elif [[ "$chunk" == "fail" ]]; then
+        idx=$((idx + 4))
+    else
+        idx=$((idx + 1))
+    fi
+done
+
+echo "Results: $SC_PASSED/$SC_TOTAL scenarios passed ($PASS_COUNT assertions passed, $FAIL_COUNT failed)"
+
+# Cleanup
+cleanup
+
+if [[ $FAIL_COUNT -eq 0 ]]; then
+    exit 0
+else
+    exit 1
+fi

@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "files_created": [
+    "scripts/cancel-task.sh"
+  ],
+  "files_modified": [
+    "ENHANCEMENT-ROADMAP.md"
+  ],
+  "tests_run": [
+    {"name": "cancel-task.sh is executable", "passed": true},
+    {"name": "cancels queued phase (exit 0)", "passed": true},
+    {"name": "status.json shows cancelled", "passed": true},
+    {"name": "events.jsonl has phase_cancelled", "passed": true},
+    {"name": "rejects already-cancelled (exit 1)", "passed": true},
+    {"name": "rejects non-existent phase (exit 1)", "passed": true}
+  ],
+  "blockers": [],
+  "summary": "Created cancel-task.sh to cancel queued phases. Uses jq for JSON manipulation, validates phase status, logs cancellation events."
+}

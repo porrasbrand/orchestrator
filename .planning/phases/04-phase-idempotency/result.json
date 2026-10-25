@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "files_created": [],
+  "files_modified": [
+    "templates/spec.md",
+    "scripts/check-spec.sh",
+    "ENHANCEMENT-ROADMAP.md"
+  ],
+  "tests_run": [
+    {"name": "Cleanup section exists in spec.md", "passed": true},
+    {"name": "Cleanup marked as optional", "passed": true},
+    {"name": "check-spec.sh recognizes Cleanup", "passed": true},
+    {"name": "spec without Cleanup passes", "passed": true},
+    {"name": "3.4 marked as done", "passed": true},
+    {"name": "Sprint 3 marked complete", "passed": true}
+  ],
+  "blockers": [],
+  "summary": "Added optional Cleanup section to spec template for idempotent re-runs. Updated check-spec.sh to recognize it. Marked Sprint 3 as complete."
+}

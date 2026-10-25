@@ -1,0 +1,21 @@
+{
+  "status": "complete",
+  "phase": "03-auto-rollback",
+  "commit": "pending",
+  "files_modified": ["ENHANCEMENT-ROADMAP.md"],
+  "files_created": ["scripts/auto-rollback.sh"],
+  "tests_run": [
+    {"name": "File exists and is executable", "passed": true},
+    {"name": "Usage on no args", "passed": true},
+    {"name": "References regression-test.sh", "passed": true},
+    {"name": "References notify.sh", "passed": true},
+    {"name": "Uses git revert (not git reset)", "passed": true},
+    {"name": "Handles rolled_back status", "passed": true},
+    {"name": "References events.jsonl", "passed": true},
+    {"name": "Has escalation path (exit 2)", "passed": true},
+    {"name": "Sprint 7.3 in roadmap marked done", "passed": true},
+    {"name": "Uses get-worker.sh registry", "passed": true}
+  ],
+  "blockers": [],
+  "summary": "Created auto-rollback.sh that reverts last merged phase on regression failure, updates status.json, logs events, and notifies via notify.sh"
+}
